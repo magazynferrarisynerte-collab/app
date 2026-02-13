@@ -895,9 +895,7 @@
       }
 
       if (q) {
-        filtered = filtered.filter(function (i) {
-          return fuzzyFilter(i, ['nazwa', 'kod', 'imie', 'telefon'], q);
-        });
+        filtered = scoredSearch(filtered, ['nazwa', 'kod', 'imie', 'telefon'], q);
       }
       renderLog(filtered);
     }
@@ -949,6 +947,7 @@
         .withSuccessHandler(function (d) {
           allLogEntries = d || [];
           applyLogFilters();
+          renderOsoby(allOsoby);
           hideLoading();
         })
         .withFailureHandler(function (err) {
@@ -1044,11 +1043,16 @@
         container.innerHTML = '<div class="empty-msg">Brak osób w bazie</div>';
         return;
       }
+      var counts = getActiveCountByPerson();
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var o = data[i];
+        var cnt = counts[o.id] || 0;
         h += '<div class="osoba-card" onclick="openOsobaDetail(\'' + esc(o.id) + '\')">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;">'
           + '<div style="font-weight:bold;font-size:18px;">' + esc(o.imie) + '</div>'
+          + (cnt > 0 ? '<span class="status-badge status-borrowed">Wypożyczone: ' + cnt + '</span>' : '')
+          + '</div>'
           + '<div style="color:#667eea;margin-top:5px;">' + esc(o.telefon) + '</div>'
           + '</div>';
       }
@@ -1168,40 +1172,20 @@
     /* =========================
        WYSZUKIWANIE
     ========================= */
-    document.getElementById("searchLog").addEventListener("input", function (e) {
+    document.getElementById("searchLog").addEventListener("input", function () {
       applyLogFilters();
-      // var q = e.target.value.toLowerCase();
-      // if (!q) { renderLog(allLogEntries); return; }
-      // var filtered = allLogEntries.filter(function(i) {
-      //   return (i.nazwa && i.nazwa.toLowerCase().indexOf(q) !== -1)
-      //       || (i.kod && i.kod.toLowerCase().indexOf(q) !== -1)
-      //       || (i.imie && i.imie.toLowerCase().indexOf(q) !== -1)
-      //       || (i.telefon && i.telefon.toLowerCase().indexOf(q) !== -1);
-      // });
-      // renderLog(filtered);
     });
 
     document.getElementById("searchOsoby").addEventListener("input", function (e) {
-      // var q = e.target.value.toLowerCase();
-      // if (!q) { renderOsoby(allOsoby); return; }
-      // var filtered = allOsoby.filter(function(o) {
-      //   return (o.imie && o.imie.toLowerCase().indexOf(q) !== -1)
-      //       || (o.telefon && o.telefon.toLowerCase().indexOf(q) !== -1);
-      // });
-      // renderOsoby(filtered);
       var q = e.target.value;
       if (!q) { renderOsoby(allOsoby); return; }
-      renderOsoby(allOsoby.filter(function (o) {
-        return fuzzyFilter(o, ['imie', 'telefon'], q);
-      }));
+      renderOsoby(scoredSearch(allOsoby, ['imie', 'telefon'], q));
     });
 
     document.getElementById("searchNarzedzia").addEventListener("input", function (e) {
       var q = e.target.value;
       if (!q) { renderNarzedzia(allNarzedzia); return; }
-      renderNarzedzia(allNarzedzia.filter(function (n) {
-        return fuzzyFilter(n, ['nazwa', 'kod', 'opis'], q);
-      }));
+      renderNarzedzia(scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis'], q));
     });
 
     /* =========================
@@ -1224,11 +1208,15 @@
         container.innerHTML = '<div class="empty-msg">Brak osób — najpierw dodaj kogoś w zakładce Osoby</div>';
         return;
       }
+      var counts = getActiveCountByPerson();
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var o = data[i];
+        var cnt = counts[o.id] || 0;
         h += '<div class="picker-item" onclick="wypSelectOsoba(\'' + esc(o.id) + '\',\'' + esc(o.imie) + '\')">'
-          + '<span style="font-weight:bold;">' + esc(o.imie) + '</span>'
+          + '<div><span style="font-weight:bold;">' + esc(o.imie) + '</span>'
+          + (cnt > 0 ? ' <span class="status-badge status-borrowed" style="font-size:11px;">Wypożyczone: ' + cnt + '</span>' : '')
+          + '</div>'
           + '<span style="color:#636e72;">' + esc(o.telefon) + '</span>'
           + '</div>';
       }
@@ -1238,9 +1226,7 @@
     function filterWypOsoby() {
       var q = document.getElementById('wypOsobaSearch').value;
       if (!q) { renderWypOsobyList(allOsoby); return; }
-      renderWypOsobyList(allOsoby.filter(function (o) {
-        return fuzzyFilter(o, ['imie', 'telefon'], q);
-      }));
+      renderWypOsobyList(scoredSearch(allOsoby, ['imie', 'telefon'], q));
     }
 
     function wypSelectOsoba(id, name) {
@@ -1307,9 +1293,7 @@
     function filterWypNarz() {
       var q = document.getElementById('wypNarzSearch').value;
       if (!q) { renderWypNarzList(allNarzedzia); return; }
-      renderWypNarzList(allNarzedzia.filter(function (n) {
-        return fuzzyFilter(n, ['nazwa', 'kod', 'opis'], q);
-      }));
+      renderWypNarzList(scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis'], q));
     }
 
     function wypAddToCart(kod, nazwa, maxQty) {
@@ -1331,9 +1315,7 @@
     function getFilteredNarz() {
       var q = document.getElementById('wypNarzSearch').value;
       if (!q) return allNarzedzia;
-      return allNarzedzia.filter(function (n) {
-        return fuzzyFilter(n, ['nazwa', 'kod', 'opis'], q);
-      });
+      return scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis'], q);
     }
 
     function wypCartChangeQty(kod, delta) {
@@ -1445,9 +1427,6 @@
         })
         .wypozyczBatch(wypOsobaId, items);
     }
-    document.getElementById("searchLog").addEventListener("input", function () {
-      applyLogFilters();
-    });
     function normalize(str) {
       if (!str) return '';
       return String(str).toLowerCase()
@@ -1456,27 +1435,144 @@
         .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z');
     }
 
-    function fuzzyMatch(text, query) {
-      var t = normalize(text);
-      var q = normalize(query);
-      var ti = 0;
-      for (var qi = 0; qi < q.length; qi++) {
-        var found = false;
-        while (ti < t.length) {
-          if (t[ti] === q[qi]) { ti++; found = true; break; }
-          ti++;
-        }
-        if (!found) return false;
+    /* =========================
+       SŁOWNIK SYNONIMÓW
+    ========================= */
+    var SYNONYMS = {
+      'mlotek': ['mlot', 'mloteczek', 'mlotek'],
+      'mlot': ['mlotek', 'mloteczek', 'mlot'],
+      'klucz nasadowy': ['nasadki', 'klucz nasadowy'],
+      'nasadki': ['klucz nasadowy', 'nasadki'],
+      'wiertarka': ['wiertarko-wkretarka', 'wiertarka'],
+      'szlifierka': ['szlifierka katowa', 'flex', 'szlifierka'],
+      'flex': ['szlifierka katowa', 'szlifierka', 'flex'],
+      'kombinerki': ['kombinerki', 'szczypce'],
+      'szczypce': ['kombinerki', 'szczypce'],
+      'srubokrety': ['wkretak', 'srubokrety', 'srubokret'],
+      'wkretak': ['srubokrety', 'srubokret', 'wkretak'],
+      'srubokret': ['srubokrety', 'wkretak', 'srubokret'],
+      'poziomica': ['poziomica', 'libella'],
+      'libella': ['poziomica', 'libella']
+    };
+
+    function expandWithSynonyms(word) {
+      var syns = SYNONYMS[word];
+      if (!syns) return [word];
+      var result = [word];
+      for (var i = 0; i < syns.length; i++) {
+        if (syns[i] !== word) result.push(syns[i]);
       }
-      return true;
+      return result;
     }
 
-    function fuzzyFilter(item, fields, query) {
-      if (!query) return true;
-      for (var i = 0; i < fields.length; i++) {
-        if (fuzzyMatch(item[fields[i]], query)) return true;
+    /* =========================
+       SCORING (zastępuje fuzzyMatch)
+    ========================= */
+    function levenshtein(a, b) {
+      var m = a.length, n = b.length;
+      if (m === 0) return n;
+      if (n === 0) return m;
+      var prev = [], curr = [];
+      for (var j = 0; j <= n; j++) prev[j] = j;
+      for (var i = 1; i <= m; i++) {
+        curr[0] = i;
+        for (var j = 1; j <= n; j++) {
+          var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+        }
+        var tmp = prev; prev = curr; curr = tmp;
       }
-      return false;
+      return prev[n];
+    }
+
+    function scoreWord(text, word) {
+      var t = normalize(text);
+      var w = word; // already normalized
+      if (!t || !w) return 0;
+      // exact match
+      if (t === w) return 1.0;
+      // prefix
+      if (t.indexOf(w) === 0) return 0.9;
+      // substring
+      if (t.indexOf(w) !== -1) return 0.85;
+      // levenshtein on individual words of text
+      var tWords = t.split(/\s+/);
+      var bestLev = Infinity;
+      for (var i = 0; i < tWords.length; i++) {
+        var d = levenshtein(tWords[i], w);
+        if (d < bestLev) bestLev = d;
+      }
+      if (bestLev <= 2) {
+        return 0.6 + (2 - bestLev) * 0.075; // 0: 0.75, 1: 0.675, 2: 0.6
+      }
+      // sequential character matching (old fuzzy)
+      var ti = 0, matched = 0;
+      for (var qi = 0; qi < w.length; qi++) {
+        while (ti < t.length) {
+          if (t[ti] === w[qi]) { ti++; matched++; break; }
+          ti++;
+        }
+      }
+      if (matched === w.length && w.length > 0) {
+        return 0.1 + 0.3 * (matched / t.length);
+      }
+      return 0;
+    }
+
+    function scoreItem(item, fields, query) {
+      var q = normalize(query).trim();
+      if (!q) return 1;
+      var words = q.split(/\s+/);
+      var wordScores = [];
+      for (var wi = 0; wi < words.length; wi++) {
+        var expanded = expandWithSynonyms(words[wi]);
+        var bestScore = 0;
+        for (var fi = 0; fi < fields.length; fi++) {
+          var fieldVal = item[fields[fi]];
+          if (!fieldVal) continue;
+          for (var ei = 0; ei < expanded.length; ei++) {
+            var s = scoreWord(fieldVal, expanded[ei]);
+            // synonym penalty: 10% reduction if not original word
+            if (ei > 0 && s > 0) s *= 0.9;
+            if (s > bestScore) bestScore = s;
+          }
+        }
+        if (bestScore === 0) return 0; // AND logic
+        wordScores.push(bestScore);
+      }
+      if (!wordScores.length) return 0;
+      var minS = wordScores[0], sum = 0;
+      for (var i = 0; i < wordScores.length; i++) {
+        if (wordScores[i] < minS) minS = wordScores[i];
+        sum += wordScores[i];
+      }
+      return minS * 0.4 + (sum / wordScores.length) * 0.6;
+    }
+
+    function scoredSearch(data, fields, query) {
+      var results = [];
+      for (var i = 0; i < data.length; i++) {
+        var s = scoreItem(data[i], fields, query);
+        if (s > 0) results.push({ item: data[i], score: s });
+      }
+      results.sort(function (a, b) { return b.score - a.score; });
+      var out = [];
+      for (var i = 0; i < results.length; i++) out.push(results[i].item);
+      return out;
+    }
+
+    /* =========================
+       LICZNIK AKTYWNYCH WYPOŻYCZEŃ
+    ========================= */
+    function getActiveCountByPerson() {
+      var counts = {};
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (!e.dataZwrotu) {
+          counts[e.idOsoby] = (counts[e.idOsoby] || 0) + 1;
+        }
+      }
+      return counts;
     }
     /* =========================
        PRELOAD
