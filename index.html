@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Magazyn Wypożyczalnia</title>
+  <style>
+    .osoba-card {
+      cursor: pointer;
+    }
+
+    .osoba-card:active {
+      background: #f8f9fa;
+    }
+
+    .wyp-item-check {
+      width: 24px;
+      height: 24px;
+      accent-color: #667eea;
+    }
+
+    .return-cart-bar {
+      position: sticky;
+      bottom: 0;
+      background: white;
+      padding: 15px;
+      border-top: 2px solid #eee;
+      display: none;
+    }
+
+    .return-cart-bar.show {
+      display: block;
+    }
+
+    .whatsapp-btn {
+      width: 100%;
+      height: 60px;
+      border: none;
+      border-radius: 15px;
+      background: #25d366;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .filter-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #667eea;
+      border-radius: 12px;
+      background: white;
+      color: #667eea;
+      font-weight: bold;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .filter-btn.active {
+      background: #667eea;
+      color: white;
+    }
+
+    .return-btn {
+      border: none;
+      cursor: pointer;
+      padding: 8px 15px;
+    }
+
+    #wypNarzList {
+      max-height: 420px;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 15px;
+    }
+
+    #wypCart {
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #wypStep2 {
+      display: flex;
+      flex-direction: column;
+      height: calc(100dvh - 120px);
+    }
+
+    #wypStep2 #wypNarzList {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      overflow-x: hidden;
+      background-color: #f4f7f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #2d3436;
+    }
+
+    body {
+      font-size: 18px;
+      padding-bottom: 120px;
+    }
+
+    #modalWypozycz .picker-item {
+      background: #ffffff;
+    }
+
+    #modalWypozycz #wypNarzList {
+      background: #ffffff;
+      border-radius: 15px;
+      padding: 5px 0;
+    }
+
+    /* LOADING & TOAST */
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      z-index: 20000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loading.show {
+      display: flex;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 130px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 15px 30px;
+      border-radius: 50px;
+      font-weight: bold;
+      z-index: 15000;
+      display: none;
+      text-align: center;
+      width: 80%;
+    }
+
+    .toast.show {
+      display: block;
+      animation: fadeInUp 0.3s;
+    }
+
+    .toast.success {
+      background: #10b981;
+    }
+
+    .toast.error {
+      background: #ef4444;
+    }
+
+    /* KARTY I TABY */
+    .tab-content {
+      display: none;
+      width: 100vw;
+      padding: 15px;
+    }
+
+    .tab-content.active {
+      display: block !important;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 25px 15px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      position: sticky;
+      top: 0;
+      z-index: 900;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* FORMULARZE */
+    .search-input,
+    .form-input,
+    .picker-search {
+      width: 100%;
+      height: 70px;
+      padding: 0 20px;
+      font-size: 22px;
+      border: 3px solid #dfe6e9;
+      border-radius: 15px;
+      margin-bottom: 15px;
+      background: white;
+      outline: none;
+    }
+
+    .search-input:focus,
+    .form-input:focus,
+    .picker-search:focus {
+      border-color: #667eea;
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+      color: #636e72;
+      font-size: 16px;
+    }
+
+    /* DOLNE MENU */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 100px;
+      background: white;
+      border-top: 2px solid #dfe6e9;
+      display: flex;
+      z-index: 1000;
+    }
+
+    .nav-btn {
+      flex: 1;
+      border: none;
+      background: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #b2bec3;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .nav-icon {
+      font-size: 35px;
+      margin-bottom: 5px;
+    }
+
+    .nav-btn.active {
+      color: #667eea;
+      font-weight: bold;
+    }
+
+    .fab {
+      position: fixed;
+      bottom: 120px;
+      right: 25px;
+      width: 85px;
+      height: 85px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 45px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.5);
+      z-index: 999;
+      cursor: pointer;
+    }
+
+    /* MODALE */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 5000;
+      display: none;
+    }
+
+    .modal.show {
+      display: block;
+    }
+
+    .modal-content {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100dvh;
+      max-height: 100%;
+      border-radius: 0;
+      padding: 20px;
+      overflow-y: auto;
+      background: #f4f7f9;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-title {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .close-btn {
+      background: #f1f2f6;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      font-size: 30px;
+      cursor: pointer;
+    }
+
+    /* PRZYCISKI */
+    .btn {
+      width: 100%;
+      height: 75px;
+      border: none;
+      border-radius: 18px;
+      font-size: 20px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+      box-shadow: 0 5px 0 #4c61c1;
+    }
+
+    .btn-success {
+      background: #10b981;
+      color: white;
+      box-shadow: 0 5px 0 #059669;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+      box-shadow: 0 5px 0 #b91c1c;
+    }
+
+    .btn:active {
+      transform: translateY(3px);
+      box-shadow: none;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* LISTY I KARTY */
+    .log-card,
+    .osoba-card,
+    .narz-card {
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      border: 1px solid #eee;
+    }
+
+    .log-card-title {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .log-card-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #f1f2f6;
+      padding-top: 10px;
+      margin-top: 8px;
+      gap: 10px;
+    }
+
+    .log-card-row:first-child {
+      border-top: none;
+      margin-top: 0;
+    }
+
+    .log-item {
+      font-size: 14px;
+      color: #636e72;
+    }
+
+    .log-item b {
+      font-size: 16px;
+      color: #2d3436;
+      display: block;
+    }
+
+    .status-badge {
+      padding: 5px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .status-available {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .status-borrowed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .picker-item {
+      padding: 20px;
+      border-bottom: 1px solid #f1f2f6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .picker-item:active {
+      background: #f8f9fa;
+    }
+
+    .cart-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 15px;
+      margin-bottom: 10px;
+    }
+
+    .qty-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .qty-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      font-size: 22px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .qty-btn:active {
+      background: #667eea;
+      color: white;
+    }
+
+    .qty-val {
+      font-size: 20px;
+      font-weight: bold;
+      min-width: 30px;
+      text-align: center;
+    }
+
+    .remove-cart-btn {
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 35px;
+      height: 35px;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .empty-msg {
+      text-align: center;
+      padding: 40px 20px;
+      color: #b2bec3;
+      font-size: 16px;
+    }
+
+    /* Confirm bar override */
+    #confirmBar .modal-content {
+      position: fixed;
+      top: auto;
+      bottom: 30%;
+      height: auto;
+      border-radius: 30px;
+      width: 90%;
+      left: 5%;
+      background: white;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+      }
+
+      to {
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <!-- CONFIRM DIALOG -->
+  <div class="modal" id="confirmBar">
+    <div class="modal-content">
+      <div class="modal-title" id="confirmText" style="text-align: center; margin-bottom: 30px;">Czy na pewno?</div>
+      <div style="display: flex; gap: 15px;">
+        <button class="btn btn-danger" style="background: #ccc; box-shadow: none;" id="confirmNo">Nie</button>
+        <button class="btn btn-success" id="confirmYes">Tak, potwierdzam</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1 id="headerTitle">Magazyn Wypożyczalnia</h1>
+  </div>
+
+  <!-- TAB: LOG -->
+  <div class="tab-content active" id="tabLog">
+    <input type="text" id="searchLog" class="search-input"
+      placeholder="Szukaj w logach (osoba, narzędzie, kod, telefon)">
+    <div style="display:flex;gap:10px;margin-bottom:15px;">
+      <button class="filter-btn" onclick="filterLogStatus('all',this)">Wszystkie</button>
+      <button class="filter-btn active" onclick="filterLogStatus('active',this)">Aktywne</button>
+      <button class="filter-btn" onclick="filterLogStatus('returned',this)">Zwrócone</button>
+    </div>
+    <div id="logList"></div>
+    <button class="fab" onclick="openWypozyczModal()">➕</button>
+  </div>
+
+  <!-- TAB: OSOBY -->
+  <div class="tab-content" id="tabOsoby">
+    <input type="text" class="search-input" id="searchOsoby" placeholder="Szukaj osoby...">
+    <div id="osobyList"></div>
+    <button class="fab" onclick="openAddOsobaModal()">+</button>
+  </div>
+
+  <!-- TAB: NARZĘDZIA -->
+  <div class="tab-content" id="tabNarzedzia">
+    <button class="btn btn-primary" onclick="mergeNarzedzia()" style="height:50px;font-size:16px;margin-bottom:15px;">🔄
+      Scal duplikaty</button>
+    <input type="text" class="search-input" id="searchNarzedzia" placeholder="Szukaj narzędzia...">
+    <div id="narzedziaList"></div>
+    <button class="fab" onclick="openAddNarzedzieModal()">+</button>
+  </div>
+  <!-- MODAL: SZCZEGÓŁY OSOBY -->
+  <div class="modal" id="modalOsobaDetail">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="osobaDetailTitle">Wypożyczenia</div>
+        <button class="close-btn" onclick="closeModal('modalOsobaDetail')">&times;</button>
+      </div>
+      <div id="osobaDetailInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
+      <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
+      <div id="osobaWypList"></div>
+      <div class="return-cart-bar" id="returnCartBar">
+        <div style="font-weight:bold;margin-bottom:10px;">Zaznaczono: <span id="returnCartCount">0</span></div>
+        <button class="btn btn-danger" id="returnCartBtn" onclick="returnCartSubmit()">Zwróć zaznaczone</button>
+        <button class="whatsapp-btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()" style="display:none;">💬
+          WhatsApp — potwierdzenie zwrotu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-tab="log" onclick="switchTab('log', this)"><span
+        class="nav-icon">📋</span><span>Log</span></button>
+    <button class="nav-btn" data-tab="osoby" onclick="switchTab('osoby', this)"><span
+        class="nav-icon">👥</span><span>Osoby</span></button>
+    <button class="nav-btn" data-tab="narzedzia" onclick="switchTab('narzedzia', this)"><span
+        class="nav-icon">🔧</span><span>Narzędzia</span></button>
+  </div>
+
+  <!-- MODAL: DODAJ OSOBĘ -->
+  <div class="modal" id="modalAddOsoba">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Dodaj nową osobę</div>
+        <button class="close-btn" onclick="closeModal('modalAddOsoba')">&times;</button>
+      </div>
+      <label class="form-label">Imię i Nazwisko</label>
+      <input type="text" class="form-input" id="newOsobaImie" placeholder="np. Jan Kowalski">
+      <label class="form-label">Numer telefonu</label>
+      <input type="tel" class="form-input" id="newOsobaTel" placeholder="np. 600 123 456">
+      <button class="btn btn-primary" onclick="addOsoba()">Zapisz osobę</button>
+    </div>
+  </div>
+
+  <!-- MODAL: DODAJ NARZĘDZIE -->
+  <div class="modal" id="modalAddNarzedzie">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Dodaj narzędzie</div>
+        <button class="close-btn" onclick="closeModal('modalAddNarzedzie')">&times;</button>
+      </div>
+      <label class="form-label">Kod / QR (opcjonalnie)</label>
+      <input type="text" class="form-input" id="newNarzKod" placeholder="np. NZ001 (auto jeśli pusto)">
+      <label class="form-label">Nazwa narzędzia</label>
+      <input type="text" class="form-input" id="newNarzNazwa" placeholder="np. Wiertarka Bosch">
+      <label class="form-label">Ilość</label>
+      <input type="number" class="form-input" id="newNarzIlosc" value="1" min="1">
+      <button class="btn btn-primary" onclick="addNarzedzie()">Dodaj do bazy</button>
+    </div>
+  </div>
+
+  <!-- MODAL: WYPOŻYCZENIE -->
+  <div class="modal" id="modalWypozycz">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Nowe Wypożyczenie</div>
+        <button class="close-btn" onclick="closeModal('modalWypozycz')">&times;</button>
+      </div>
+
+      <!-- KROK 1: Wybór osoby -->
+      <div id="wypStep1">
+        <input type="text" class="picker-search" id="wypOsobaSearch" placeholder="Kto pożycza? Szukaj osoby..."
+          oninput="filterWypOsoby()">
+        <div id="wypOsobaList" style="max-height: 60vh; overflow-y: auto;"></div>
+      </div>
+
+      <!-- KROK 2: Wybór narzędzi -->
+      <div id="wypStep2" style="display:none">
+        <div
+          style="background: #eef2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+          <span>👤 <b id="wypPersonName"></b></span>
+          <button onclick="wypChangeOsoba()"
+            style="color: #667eea; border:none; background:none; font-weight:bold; font-size:16px; cursor:pointer;">Zmień</button>
+        </div>
+        <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
+          oninput="filterWypNarz()">
+        <div id="wypNarzList"></div>
+
+        <div style="font-weight: bold; margin: 15px 0 10px; font-size: 18px;">🛒 KOSZYK:</div>
+        <div id="wypCart"></div>
+        <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit()" style="margin-top: 15px;"
+          disabled>Zatwierdź wypożyczenie</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================
+       ZMIENNE GLOBALNE
+    ========================= */
+    var allOsoby = [];
+    var allNarzedzia = [];
+    var allLogEntries = [];
+    var wypOsobaId = null;
+    var wypOsobaName = '';
+    var wypCartItems = [];
+
+    /* =========================
+       POMOCNICZE
+    ========================= */
+    var currentLogFilter = 'active';
+    var returnCartIds = [];
+    var currentDetailOsoba = null;
+
+    function mergeNarzedzia() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast(res.merged > 0 ? 'Scalono ' + res.merged + ' duplikatów' : 'Brak duplikatów', 'success');
+            loadNarzedzia();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .mergeDuplicateNarzedzia();
+    }
+
+    function openOsobaDetail(idOsoby) {
+      returnCartIds = [];
+      currentDetailOsoba = null;
+
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].id === idOsoby) { currentDetailOsoba = allOsoby[i]; break; }
+      }
+      if (!currentDetailOsoba) return;
+
+      document.getElementById('osobaDetailTitle').textContent = currentDetailOsoba.imie;
+      document.getElementById('osobaDetailInfo').innerHTML =
+        '👤 <b>' + esc(currentDetailOsoba.imie) + '</b>' +
+        (currentDetailOsoba.telefon ? '<br>📞 ' + esc(currentDetailOsoba.telefon) : '');
+
+      var active = allLogEntries.filter(function (e) {
+        return e.idOsoby === idOsoby && !e.dataZwrotu;
+      });
+
+      var container = document.getElementById('osobaWypList');
+      if (!active.length) {
+        container.innerHTML = '<div class="empty-msg">Brak aktywnych wypożyczeń</div>';
+        document.getElementById('returnCartBar').classList.remove('show');
+        openModal('modalOsobaDetail');
+        return;
+      }
+
+      var h = '';
+      for (var i = 0; i < active.length; i++) {
+        var e = active[i];
+        h += '<div class="cart-item" style="cursor:pointer;" onclick="toggleReturnCart(\'' + esc(e.idWyp) + '\',this)">'
+          + '<input type="checkbox" class="wyp-item-check" data-id="' + esc(e.idWyp) + '">'
+          + '<div style="flex:1;margin-left:10px;">'
+          + '<b>' + esc(e.nazwa) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
+          + '<br><span style="font-size:13px;color:#636e72;">' + esc(e.kod) + ' | ' + esc(e.dataWyp) + '</span>'
+          + '</div></div>';
+      }
+      container.innerHTML = h;
+      document.getElementById('returnCartBar').classList.add('show');
+      updateReturnCart();
+      openModal('modalOsobaDetail');
+    }
+    function buildWhatsAppUrl(phone, message) {
+      var clean = phone.replace(/[^0-9]/g, '');
+      if (clean.length === 9) clean = '48' + clean;
+      return 'https://wa.me/' + clean + '?text=' + encodeURIComponent(message);
+    }
+
+    function sendWhatsAppReturn() {
+      if (!currentDetailOsoba || !returnCartIds.length) return;
+      var items = [];
+      for (var i = 0; i < returnCartIds.length; i++) {
+        for (var j = 0; j < allLogEntries.length; j++) {
+          if (allLogEntries[j].idWyp === returnCartIds[i]) {
+            var e = allLogEntries[j];
+            items.push('- ' + e.nazwa + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : ''));
+            break;
+          }
+        }
+      }
+      var msg = 'Potwierdzenie zwrotu narzędzi:\n' + items.join('\n') + '\n\nDziękujemy!';
+      window.open(buildWhatsAppUrl(currentDetailOsoba.telefon, msg), '_blank');
+    }
+
+    function sendWhatsAppWyp() {
+      if (!wypOsobaId || !wypCartItems.length) return;
+      var osoba = null;
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].id === wypOsobaId) { osoba = allOsoby[i]; break; }
+      }
+      if (!osoba || !osoba.telefon || !osoba.telefon.trim()) return;
+
+      var items = wypCartItems.map(function (c) {
+        return '- ' + c.nazwa + (c.qty > 1 ? ' (x' + c.qty + ')' : '');
+      });
+      var msg = 'Potwierdzenie wypożyczenia:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+      window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
+    }
+    function toggleReturnCart(idWyp, el) {
+      var cb = el.querySelector('.wyp-item-check');
+      var idx = returnCartIds.indexOf(idWyp);
+      if (idx === -1) {
+        returnCartIds.push(idWyp);
+        cb.checked = true;
+      } else {
+        returnCartIds.splice(idx, 1);
+        cb.checked = false;
+      }
+      updateReturnCart();
+    }
+
+    function updateReturnCart() {
+      document.getElementById('returnCartCount').textContent = returnCartIds.length;
+      document.getElementById('returnCartBtn').disabled = returnCartIds.length === 0;
+      var hasPhone = currentDetailOsoba && currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
+      document.getElementById('returnWhatsBtn').style.display = (hasPhone && returnCartIds.length > 0) ? 'flex' : 'none';
+    }
+
+    function returnCartSubmit() {
+      if (!returnCartIds.length) return;
+      showLoading();
+      document.getElementById('returnCartBtn').disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast('Zwrócono ' + res.count + ' pozycji!', 'success');
+            closeModal('modalOsobaDetail');
+            loadLog();
+            loadNarzedziaBackground();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+            document.getElementById('returnCartBtn').disabled = false;
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast('Błąd: ' + err.message, 'error');
+          document.getElementById('returnCartBtn').disabled = false;
+        })
+        .oddajBatch(returnCartIds);
+    }
+
+    function filterLogStatus(status, btn) {
+      currentLogFilter = status;
+      document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyLogFilters();
+    }
+
+    function applyLogFilters() {
+      var q = document.getElementById('searchLog').value;
+      var filtered = allLogEntries;
+
+      if (currentLogFilter === 'active') {
+        filtered = filtered.filter(function (i) { return !i.dataZwrotu; });
+      } else if (currentLogFilter === 'returned') {
+        filtered = filtered.filter(function (i) { return !!i.dataZwrotu; });
+      }
+
+      if (q) {
+        filtered = filtered.filter(function (i) {
+          return fuzzyFilter(i, ['nazwa', 'kod', 'imie', 'telefon'], q);
+        });
+      }
+      renderLog(filtered);
+    }
+
+    function showLoading() { document.getElementById('loading').classList.add('show'); }
+    function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+
+    function toast(msg, type) {
+      type = type || 'info';
+      var el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show ' + type;
+      setTimeout(function () { el.classList.remove('show'); }, 3000);
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('show'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+    function esc(t) {
+      if (!t) return '';
+      return String(t).replace(/[&<>"']/g, function (m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+      });
+    }
+
+    /* =========================
+       NAWIGACJA
+    ========================= */
+    function switchTab(tab, btn) {
+      document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+
+      document.querySelectorAll('.tab-content').forEach(function (t) { t.classList.remove('active'); });
+
+      var tabId = 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1);
+      var tabEl = document.getElementById(tabId);
+      if (tabEl) tabEl.classList.add('active');
+
+      var titles = { log: 'Log wypożyczeń', osoby: 'Osoby', narzedzia: 'Narzędzia' };
+      document.getElementById('headerTitle').textContent = titles[tab] || 'Magazyn';
+    }
+
+    /* =========================
+       LOG
+    ========================= */
+    function loadLog() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (d) {
+          allLogEntries = d || [];
+          applyLogFilters();
+          hideLoading();
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd ładowania logu", "error");
+        })
+        .getLog();
+    }
+
+    function renderLog(data) {
+      var container = document.getElementById("logList");
+      if (!container) return;
+
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak wpisów w logu</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < data.length; i++) {
+        var item = data[i];
+        var isReturned = item.dataZwrotu && item.dataZwrotu.length > 0;
+
+        html += '<div class="log-card">';
+        html += '<div class="log-card-row" style="border-top:none;margin-top:0;">';
+        html += '<strong>' + esc(item.nazwa) + (item.ilosc > 1 ? ' (x' + item.ilosc + ')' : '') + '</strong>';
+        html += '<span style="color:#636e72;font-size:14px;">' + esc(item.kod) + '</span>';
+        html += '</div>';
+
+        html += '<div class="log-card-row">';
+        html += '<span>👤 ' + esc(item.imie) + '</span>';
+        html += '<span style="color:#636e72;font-size:14px;">' + esc(item.telefon) + '</span>';
+        html += '</div>';
+
+        html += '<div class="log-card-row">';
+        html += '<span style="font-size:13px;color:#636e72;">📅 ' + esc(item.dataWyp) + '</span>';
+
+        if (!isReturned) {
+          html += '<button class="status-badge status-available return-btn" '
+            + 'onclick="oddaj(this,\'' + esc(item.idWyp) + '\')">ZWRÓĆ</button>';
+        } else {
+          html += '<span class="status-badge status-borrowed">ZWRÓCONE</span>';
+        }
+        html += '</div>';
+        html += '</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function oddaj(btn, id) {
+      btn.textContent = "ODDAJĘ...";
+      btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            toast("Zwrot zapisany!", "success");
+            loadLog();
+            loadNarzedziaBackground();
+          } else {
+            toast("Błąd zwrotu", "error");
+            btn.textContent = "ZWRÓĆ";
+            btn.disabled = false;
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast("Błąd: " + err.message, "error");
+          btn.textContent = "ZWRÓĆ";
+          btn.disabled = false;
+        })
+        .oddajNarzedzie(id);
+    }
+
+    /* =========================
+       OSOBY
+    ========================= */
+    function loadOsoby() {
+      showLoading();
+      google.script.run.withSuccessHandler(function (d) {
+        allOsoby = d || [];
+        renderOsoby(allOsoby);
+        hideLoading();
+      }).withFailureHandler(function () {
+        hideLoading();
+        toast("Błąd ładowania osób", "error");
+      }).getOsoby();
+    }
+
+    function renderOsoby(data) {
+      var container = document.getElementById('osobyList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak osób w bazie</div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var o = data[i];
+        h += '<div class="osoba-card" onclick="openOsobaDetail(\'' + esc(o.id) + '\')">'
+          + '<div style="font-weight:bold;font-size:18px;">' + esc(o.imie) + '</div>'
+          + '<div style="color:#667eea;margin-top:5px;">' + esc(o.telefon) + '</div>'
+          + '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function openAddOsobaModal() {
+      document.getElementById('newOsobaImie').value = '';
+      document.getElementById('newOsobaTel').value = '';
+      openModal('modalAddOsoba');
+    }
+
+    function addOsoba() {
+      var imie = document.getElementById('newOsobaImie').value.trim();
+      var telefon = document.getElementById('newOsobaTel').value.trim();
+
+      if (!imie) { toast("Podaj imię i nazwisko", "error"); return; }
+
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast("Osoba dodana!", "success");
+            closeModal('modalAddOsoba');
+            loadOsoby();
+          } else {
+            toast("Błąd zapisu", "error");
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd: " + err.message, "error");
+        })
+        .addOsoba(imie, telefon);
+    }
+
+    /* =========================
+       NARZĘDZIA
+    ========================= */
+    function loadNarzedzia() {
+      showLoading();
+      google.script.run.withSuccessHandler(function (d) {
+        allNarzedzia = d || [];
+        renderNarzedzia(allNarzedzia);
+        hideLoading();
+      }).withFailureHandler(function () {
+        hideLoading();
+        toast("Błąd ładowania narzędzi", "error");
+      }).getNarzedzia();
+    }
+
+    function loadNarzedziaBackground() {
+      google.script.run.withSuccessHandler(function (d) {
+        allNarzedzia = d || [];
+        renderNarzedzia(allNarzedzia);
+      }).getNarzedzia();
+    }
+
+    function renderNarzedzia(data) {
+      var container = document.getElementById('narzedziaList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak narzędzi w bazie</div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var n = data[i];
+        var sCls = n.ilosc > 0 ? 'status-available' : 'status-borrowed';
+        var sTxt = n.ilosc > 0 ? 'Dostępne: ' + n.ilosc : 'Brak';
+        h += '<div class="narz-card">'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;">'
+          + '<b style="font-size:18px;">' + esc(n.nazwa) + '</b>'
+          + '<span class="status-badge ' + sCls + '">' + sTxt + '</span>'
+          + '</div>'
+          + '<div style="font-size:14px;color:#636e72;">'
+          + 'Kod: ' + esc(n.kod) + ' | Stan: ' + n.ilosc + ' ' + esc(n.jednostka)
+          + (n.opis ? '<br>S/N: ' + esc(n.opis) : '')
+          + '</div></div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function openAddNarzedzieModal() {
+      document.getElementById('newNarzKod').value = '';
+      document.getElementById('newNarzNazwa').value = '';
+      document.getElementById('newNarzIlosc').value = '1';
+      openModal('modalAddNarzedzie');
+    }
+
+    function addNarzedzie() {
+      var kod = document.getElementById('newNarzKod').value.trim();
+      var nazwa = document.getElementById('newNarzNazwa').value.trim();
+      var ilosc = parseInt(document.getElementById('newNarzIlosc').value) || 1;
+
+      if (!nazwa) { toast("Podaj nazwę narzędzia", "error"); return; }
+
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast("Narzędzie dodane!", "success");
+            closeModal('modalAddNarzedzie');
+            loadNarzedzia();
+          } else {
+            toast("Błąd zapisu", "error");
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd: " + err.message, "error");
+        })
+        .addNarzedzie(kod, nazwa, ilosc);
+    }
+
+    /* =========================
+       WYSZUKIWANIE
+    ========================= */
+    document.getElementById("searchLog").addEventListener("input", function (e) {
+      applyLogFilters();
+      // var q = e.target.value.toLowerCase();
+      // if (!q) { renderLog(allLogEntries); return; }
+      // var filtered = allLogEntries.filter(function(i) {
+      //   return (i.nazwa && i.nazwa.toLowerCase().indexOf(q) !== -1)
+      //       || (i.kod && i.kod.toLowerCase().indexOf(q) !== -1)
+      //       || (i.imie && i.imie.toLowerCase().indexOf(q) !== -1)
+      //       || (i.telefon && i.telefon.toLowerCase().indexOf(q) !== -1);
+      // });
+      // renderLog(filtered);
+    });
+
+    document.getElementById("searchOsoby").addEventListener("input", function (e) {
+      // var q = e.target.value.toLowerCase();
+      // if (!q) { renderOsoby(allOsoby); return; }
+      // var filtered = allOsoby.filter(function(o) {
+      //   return (o.imie && o.imie.toLowerCase().indexOf(q) !== -1)
+      //       || (o.telefon && o.telefon.toLowerCase().indexOf(q) !== -1);
+      // });
+      // renderOsoby(filtered);
+      var q = e.target.value;
+      if (!q) { renderOsoby(allOsoby); return; }
+      renderOsoby(allOsoby.filter(function (o) {
+        return fuzzyFilter(o, ['imie', 'telefon'], q);
+      }));
+    });
+
+    document.getElementById("searchNarzedzia").addEventListener("input", function (e) {
+      var q = e.target.value;
+      if (!q) { renderNarzedzia(allNarzedzia); return; }
+      renderNarzedzia(allNarzedzia.filter(function (n) {
+        return fuzzyFilter(n, ['nazwa', 'kod', 'opis'], q);
+      }));
+    });
+
+    /* =========================
+       MODAL WYPOŻYCZENIA
+    ========================= */
+    function openWypozyczModal() {
+      wypOsobaId = null;
+      wypOsobaName = '';
+      wypCartItems = [];
+      document.getElementById('wypOsobaSearch').value = '';
+      document.getElementById('wypStep1').style.display = 'block';
+      document.getElementById('wypStep2').style.display = 'none';
+      renderWypOsobyList(allOsoby);
+      openModal('modalWypozycz');
+    }
+
+    function renderWypOsobyList(data) {
+      var container = document.getElementById('wypOsobaList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak osób — najpierw dodaj kogoś w zakładce Osoby</div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var o = data[i];
+        h += '<div class="picker-item" onclick="wypSelectOsoba(\'' + esc(o.id) + '\',\'' + esc(o.imie) + '\')">'
+          + '<span style="font-weight:bold;">' + esc(o.imie) + '</span>'
+          + '<span style="color:#636e72;">' + esc(o.telefon) + '</span>'
+          + '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function filterWypOsoby() {
+      var q = document.getElementById('wypOsobaSearch').value;
+      if (!q) { renderWypOsobyList(allOsoby); return; }
+      renderWypOsobyList(allOsoby.filter(function (o) {
+        return fuzzyFilter(o, ['imie', 'telefon'], q);
+      }));
+    }
+
+    function wypSelectOsoba(id, name) {
+      wypOsobaId = id;
+      wypOsobaName = name;
+      document.getElementById('wypPersonName').textContent = name;
+      document.getElementById('wypStep1').style.display = 'none';
+      document.getElementById('wypStep2').style.display = 'flex';
+      document.getElementById('wypNarzSearch').value = '';
+      wypCartItems = [];
+      renderWypNarzList(allNarzedzia);
+      renderWypCart();
+    }
+
+    function wypChangeOsoba() {
+      document.getElementById('wypStep1').style.display = 'block';
+      document.getElementById('wypStep2').style.display = 'none';
+      wypOsobaId = null;
+      wypOsobaName = '';
+      wypCartItems = [];
+    }
+
+    function renderWypNarzList(data) {
+      var container = document.getElementById('wypNarzList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak narzędzi</div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var n = data[i];
+        var inCart = 0;
+        for (var c = 0; c < wypCartItems.length; c++) {
+          if (wypCartItems[c].kod === n.kod) { inCart = wypCartItems[c].qty; break; }
+        }
+        var available = n.ilosc - inCart;
+        var disabled = available <= 0;
+
+        h += '<div class="picker-item" style="' + (disabled ? 'opacity:0.4;' : '') + '"'
+          + (disabled ? '' : ' data-kod="' + esc(n.kod) + '" data-max="' + n.ilosc + '" onclick="wypAddToCartByKod(this)"')
+          + '>'
+          + '<div>'
+          + '<div style="font-weight:bold;">' + esc(n.nazwa) + '</div>'
+          + '<div style="font-size:13px;color:#636e72;">' + esc(n.kod) + '</div>'
+          + '</div>'
+          + '<span class="status-badge ' + (available > 0 ? 'status-available' : 'status-borrowed') + '">'
+          + (available > 0 ? available + ' ' + esc(n.jednostka) : 'Brak')
+          + '</span>'
+          + '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function wypAddToCartByKod(el) {
+      var kod = el.getAttribute('data-kod');
+      var maxQty = parseInt(el.getAttribute('data-max')) || 1;
+      var nazwa = '';
+      for (var i = 0; i < allNarzedzia.length; i++) {
+        if (allNarzedzia[i].kod === kod) { nazwa = allNarzedzia[i].nazwa; break; }
+      }
+      wypAddToCart(kod, nazwa, maxQty);
+    }
+
+    function filterWypNarz() {
+      var q = document.getElementById('wypNarzSearch').value;
+      if (!q) { renderWypNarzList(allNarzedzia); return; }
+      renderWypNarzList(allNarzedzia.filter(function (n) {
+        return fuzzyFilter(n, ['nazwa', 'kod', 'opis'], q);
+      }));
+    }
+
+    function wypAddToCart(kod, nazwa, maxQty) {
+      for (var i = 0; i < wypCartItems.length; i++) {
+        if (wypCartItems[i].kod === kod) {
+          if (wypCartItems[i].qty < maxQty) {
+            wypCartItems[i].qty++;
+          }
+          renderWypCart();
+          renderWypNarzList(getFilteredNarz());
+          return;
+        }
+      }
+      wypCartItems.push({ kod: kod, nazwa: nazwa, qty: 1, max: maxQty });
+      renderWypCart();
+      renderWypNarzList(getFilteredNarz());
+    }
+
+    function getFilteredNarz() {
+      var q = document.getElementById('wypNarzSearch').value;
+      if (!q) return allNarzedzia;
+      return allNarzedzia.filter(function (n) {
+        return fuzzyFilter(n, ['nazwa', 'kod', 'opis'], q);
+      });
+    }
+
+    function wypCartChangeQty(kod, delta) {
+      for (var i = 0; i < wypCartItems.length; i++) {
+        if (wypCartItems[i].kod === kod) {
+          wypCartItems[i].qty += delta;
+          if (wypCartItems[i].qty <= 0) {
+            wypCartItems.splice(i, 1);
+          } else if (wypCartItems[i].qty > wypCartItems[i].max) {
+            wypCartItems[i].qty = wypCartItems[i].max;
+          }
+          break;
+        }
+      }
+      renderWypCart();
+      renderWypNarzList(getFilteredNarz());
+    }
+
+    function wypRemoveFromCart(kod) {
+      for (var i = 0; i < wypCartItems.length; i++) {
+        if (wypCartItems[i].kod === kod) {
+          wypCartItems.splice(i, 1);
+          break;
+        }
+      }
+      renderWypCart();
+      renderWypNarzList(getFilteredNarz());
+    }
+
+    function renderWypCart() {
+      var container = document.getElementById('wypCart');
+      var btn = document.getElementById('wypSubmitBtn');
+
+      if (!wypCartItems.length) {
+        container.innerHTML = '<div class="empty-msg" style="padding:15px;">Koszyk pusty — kliknij narzędzie powyżej</div>';
+        btn.disabled = true;
+        return;
+      }
+
+      btn.disabled = false;
+      var h = '';
+      for (var i = 0; i < wypCartItems.length; i++) {
+        var c = wypCartItems[i];
+        h += '<div class="cart-item">'
+          + '<div style="flex:1;"><b>' + esc(c.nazwa) + '</b><br><span style="font-size:13px;color:#636e72;">' + esc(c.kod) + '</span></div>'
+          + '<div class="qty-controls">'
+          + '<button class="qty-btn" data-kod="' + esc(c.kod) + '" data-delta="-1" onclick="wypCartChangeQtyBtn(this)">−</button>'
+          + '<span class="qty-val">' + c.qty + '</span>'
+          + '<button class="qty-btn" data-kod="' + esc(c.kod) + '" data-delta="1" onclick="wypCartChangeQtyBtn(this)">+</button>'
+          + '</div>'
+          + '<button class="remove-cart-btn" data-kod="' + esc(c.kod) + '" onclick="wypRemoveFromCartBtn(this)" style="margin-left:10px;">✕</button>'
+          + '</div>';
+      }
+      container.innerHTML = h;
+    }
+    function wypCartChangeQtyBtn(el) {
+      var kod = el.getAttribute('data-kod');
+      var delta = parseInt(el.getAttribute('data-delta'));
+      wypCartChangeQty(kod, delta);
+    }
+
+    function wypRemoveFromCartBtn(el) {
+      var kod = el.getAttribute('data-kod');
+      wypRemoveFromCart(kod);
+    }
+    function wypSubmit() {
+      if (!wypOsobaId || !wypCartItems.length) {
+        toast("Wybierz osobę i dodaj narzędzia", "error");
+        return;
+      }
+
+      var items = wypCartItems.map(function (c) {
+        return { kod: c.kod, qty: c.qty };
+      });
+
+      showLoading();
+      document.getElementById('wypSubmitBtn').disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast("Wypożyczenie zapisane!", "success");
+            // WhatsApp
+            var osoba = null;
+            for (var i = 0; i < allOsoby.length; i++) {
+              if (allOsoby[i].id === wypOsobaId) { osoba = allOsoby[i]; break; }
+            }
+            if (osoba && osoba.telefon && osoba.telefon.trim()) {
+              var items = wypCartItems.map(function (c) {
+                return '- ' + c.nazwa + (c.qty > 1 ? ' (x' + c.qty + ')' : '');
+              });
+              var msg = 'Potwierdzenie wypożyczenia:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+              window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
+            }
+            closeModal('modalWypozycz');
+            wypCartItems = [];
+            loadLog();
+            loadNarzedziaBackground();
+          } else {
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
+            document.getElementById('wypSubmitBtn').disabled = false;
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd: " + err.message, "error");
+          document.getElementById('wypSubmitBtn').disabled = false;
+        })
+        .wypozyczBatch(wypOsobaId, items);
+    }
+    document.getElementById("searchLog").addEventListener("input", function () {
+      applyLogFilters();
+    });
+    function normalize(str) {
+      if (!str) return '';
+      return String(str).toLowerCase()
+        .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
+        .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
+        .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z');
+    }
+
+    function fuzzyMatch(text, query) {
+      var t = normalize(text);
+      var q = normalize(query);
+      var ti = 0;
+      for (var qi = 0; qi < q.length; qi++) {
+        var found = false;
+        while (ti < t.length) {
+          if (t[ti] === q[qi]) { ti++; found = true; break; }
+          ti++;
+        }
+        if (!found) return false;
+      }
+      return true;
+    }
+
+    function fuzzyFilter(item, fields, query) {
+      if (!query) return true;
+      for (var i = 0; i < fields.length; i++) {
+        if (fuzzyMatch(item[fields[i]], query)) return true;
+      }
+      return false;
+    }
+    /* =========================
+       PRELOAD
+    ========================= */
+    function preload() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (data) {
+          allOsoby = (data && data.osoby) || [];
+          allNarzedzia = (data && data.narzedzia) || [];
+          renderOsoby(allOsoby);
+          renderNarzedzia(allNarzedzia);
+          hideLoading();
+          loadLog();
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd ładowania danych", "error");
+          loadLog();
+          loadOsoby();
+          loadNarzedzia();
+        })
+        .getInitialData();
+    }
+
+    /* =========================
+       INIT
+    ========================= */
+    window.addEventListener("load", function () {
+      preload();
+    });
+  </script>
+
+</body>
+
+</html>
