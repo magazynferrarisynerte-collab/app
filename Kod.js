@@ -443,9 +443,54 @@ function getUszkodzone() {
 }
 
 function addUszkodzone(kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, ilosc) {
-  var sheet = getSheet(SHEET_USZKODZONE);
-  var id = generateId('USZ');
-  sheet.appendRow([id, kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, new Date(), Number(ilosc) || 1]);
-  CacheService.getScriptCache().remove("uszkodzone");
-  return { success: true, id: id };
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_USZKODZONE);
+    var id = generateId('USZ');
+    var qty = Number(ilosc) || 1;
+    sheet.appendRow([id, kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, new Date(), qty]);
+
+    // Automatycznie oddaj uszkodzone — zmniejsz stan w magazynie
+    zmniejszStanNarzedzia(kodNarzedzia, qty);
+
+    // Automatycznie zwróć aktywne wypożyczenia tego narzędzia (do ilości uszkodzonych)
+    autoReturnDamaged(kodNarzedzia, qty);
+
+    CacheService.getScriptCache().remove("uszkodzone");
+    CacheService.getScriptCache().remove("narzedzia");
+    return { success: true, id: id };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
+}
+
+function zmniejszStanNarzedzia(kod, ilosc) {
+  var sheet = getSheet(SHEET_NARZEDZIA);
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][COLS_NARZ.KOD]) === String(kod)) {
+      var stan = Number(data[i][COLS_NARZ.ILOSC]) || 0;
+      sheet.getRange(i + 1, COLS_NARZ.ILOSC + 1).setValue(Math.max(0, stan - ilosc));
+      break;
+    }
+  }
+  CacheService.getScriptCache().remove("narzedzia");
+}
+
+function autoReturnDamaged(kod, maxQty) {
+  var sheet = getSheet(SHEET_WYPOZYCZENIA);
+  var data = sheet.getDataRange().getValues();
+  var returned = 0;
+
+  for (var i = 1; i < data.length && returned < maxQty; i++) {
+    if (String(data[i][1]) === String(kod) && (!data[i][8] || String(data[i][8]).length === 0)) {
+      sheet.getRange(i + 1, 9).setValue(new Date());
+      var ilosc = Number(data[i][9]) || 1;
+      returned += ilosc;
+    }
+  }
 }

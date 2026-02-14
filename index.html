@@ -704,7 +704,8 @@
       <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
         style="display:none;height:50px;font-size:16px;margin-bottom:15px;">💬 Wyślij stan wypożyczeń WhatsApp</button>
       <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
-      <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..." oninput="filterOsobaWyp()" style="height:50px;font-size:16px;margin-bottom:10px;">
+      <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..."
+        oninput="filterOsobaWyp()" style="height:50px;font-size:16px;margin-bottom:10px;">
       <div id="osobaWypList"></div>
       <div class="return-cart-bar" id="returnCartBar">
         <div style="font-weight:bold;margin-bottom:10px;">Zaznaczono: <span id="returnCartCount">0</span></div>
@@ -722,9 +723,11 @@
         <div class="modal-title">Zgłoś uszkodzenie</div>
         <button class="close-btn" onclick="closeModal('modalDamage')">&times;</button>
       </div>
-      <div id="damageNarzInfo" style="background:#fee2e2;padding:15px;border-radius:15px;margin-bottom:15px;font-size:16px;"></div>
+      <div id="damageNarzInfo"
+        style="background:#fee2e2;padding:15px;border-radius:15px;margin-bottom:15px;font-size:16px;"></div>
       <label class="form-label">Opis uszkodzenia</label>
-      <textarea class="form-input" id="damageOpis" rows="3" placeholder="Opisz uszkodzenie..." style="height:auto;padding:15px;font-size:18px;"></textarea>
+      <textarea class="form-input" id="damageOpis" rows="3" placeholder="Opisz uszkodzenie..."
+        style="height:auto;padding:15px;font-size:18px;"></textarea>
       <label class="form-label">Ilość uszkodzonych</label>
       <input type="number" class="form-input" id="damageIlosc" value="1" min="1">
       <button class="btn btn-danger" onclick="submitDamage()">Zgłoś uszkodzenie</button>
@@ -1495,17 +1498,17 @@
           if (wypCartItems[c].kod === n.kod) { inCart = wypCartItems[c].qty; break; }
         }
         var available = n.ilosc - inCart;
-        var disabled = available <= 0;
+        if (available <= 0) continue; // Ukryj niedostępne narzędzia (w tym uszkodzone)
 
-        h += '<div class="picker-item" style="' + (disabled ? 'opacity:0.4;' : '') + '"'
-          + (disabled ? '' : ' data-kod="' + esc(n.kod) + '" data-max="' + n.ilosc + '" onclick="wypAddToCartByKod(this)"')
+        h += '<div class="picker-item"'
+          + ' data-kod="' + esc(n.kod) + '" data-max="' + n.ilosc + '" onclick="wypAddToCartByKod(this)"'
           + '>'
           + '<div>'
           + '<div style="font-weight:bold;">' + esc(n.nazwa) + ' ' + getKategoriaBadge(n.kategoria) + '</div>'
           + '<div style="font-size:13px;color:#636e72;">' + esc(n.kod) + (extractSN(n.opis) ? ' | S/N: ' + esc(extractSN(n.opis)) : '') + '</div>'
           + '</div>'
-          + '<span class="status-badge ' + (available > 0 ? 'status-available' : 'status-borrowed') + '">'
-          + (available > 0 ? available + ' ' + esc(n.jednostka) : 'Brak')
+          + '<span class="status-badge status-available">'
+          + available + ' ' + esc(n.jednostka)
           + '</span>'
           + '</div>';
       }
