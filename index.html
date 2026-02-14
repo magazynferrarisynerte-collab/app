@@ -179,13 +179,6 @@
       display: block;
     }
 
-    /* LOG COMPACT */
-    .log-card {
-      padding: 10px 14px;
-      margin-bottom: 8px;
-      border-radius: 14px;
-    }
-
     .log-card .log-card-row {
       padding-top: 5px;
       margin-top: 5px;
@@ -475,9 +468,9 @@
     .osoba-card,
     .narz-card {
       background: white;
-      border-radius: 20px;
-      padding: 20px;
-      margin-bottom: 15px;
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
       border: 1px solid #eee;
     }
@@ -711,6 +704,7 @@
       <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
         style="display:none;height:50px;font-size:16px;margin-bottom:15px;">💬 Wyślij stan wypożyczeń WhatsApp</button>
       <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
+      <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..." oninput="filterOsobaWyp()" style="height:50px;font-size:16px;margin-bottom:10px;">
       <div id="osobaWypList"></div>
       <div class="return-cart-bar" id="returnCartBar">
         <div style="font-weight:bold;margin-bottom:10px;">Zaznaczono: <span id="returnCartCount">0</span></div>
@@ -718,6 +712,22 @@
         <button class="whatsapp-btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()" style="display:none;">💬
           WhatsApp — potwierdzenie zwrotu</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ZGŁOŚ USZKODZENIE -->
+  <div class="modal" id="modalDamage">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Zgłoś uszkodzenie</div>
+        <button class="close-btn" onclick="closeModal('modalDamage')">&times;</button>
+      </div>
+      <div id="damageNarzInfo" style="background:#fee2e2;padding:15px;border-radius:15px;margin-bottom:15px;font-size:16px;"></div>
+      <label class="form-label">Opis uszkodzenia</label>
+      <textarea class="form-input" id="damageOpis" rows="3" placeholder="Opisz uszkodzenie..." style="height:auto;padding:15px;font-size:18px;"></textarea>
+      <label class="form-label">Ilość uszkodzonych</label>
+      <input type="number" class="form-input" id="damageIlosc" value="1" min="1">
+      <button class="btn btn-danger" onclick="submitDamage()">Zgłoś uszkodzenie</button>
     </div>
   </div>
 
@@ -822,9 +832,11 @@
     var allOsoby = [];
     var allNarzedzia = [];
     var allLogEntries = [];
+    var allUszkodzone = [];
     var wypOsobaId = null;
     var wypOsobaName = '';
     var wypCartItems = [];
+    var damageKod = '', damageNazwa = '';
 
     /* =========================
        POMOCNICZE
@@ -866,9 +878,12 @@
         .mergeDuplicateNarzedzia();
     }
 
+    var currentDetailActive = [];
+
     function openOsobaDetail(idOsoby) {
       returnCartIds = [];
       currentDetailOsoba = null;
+      currentDetailActive = [];
 
       for (var i = 0; i < allOsoby.length; i++) {
         if (allOsoby[i].id === idOsoby) { currentDetailOsoba = allOsoby[i]; break; }
@@ -880,26 +895,29 @@
         '👤 <b>' + esc(currentDetailOsoba.imie) + '</b>' +
         (currentDetailOsoba.telefon ? '<br>📞 ' + esc(currentDetailOsoba.telefon) : '');
 
-      var active = allLogEntries.filter(function (e) {
+      currentDetailActive = allLogEntries.filter(function (e) {
         return e.idOsoby === idOsoby && !e.dataZwrotu;
       });
 
       var hasPhone = currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
-      document.getElementById('osobaWhatsStanBtn').style.display = (hasPhone && active.length > 0) ? 'flex' : 'none';
+      document.getElementById('osobaWhatsStanBtn').style.display = (hasPhone && currentDetailActive.length > 0) ? 'flex' : 'none';
+      document.getElementById('searchOsobaWyp').value = '';
+      renderOsobaWypList(currentDetailActive);
+      openModal('modalOsobaDetail');
+    }
 
+    function renderOsobaWypList(data) {
       var container = document.getElementById('osobaWypList');
-      if (!active.length) {
+      if (!data || !data.length) {
         container.innerHTML = '<div class="empty-msg">Brak aktywnych wypożyczeń</div>';
         document.getElementById('returnCartBar').classList.remove('show');
-        openModal('modalOsobaDetail');
         return;
       }
-
       var h = '';
-      for (var i = 0; i < active.length; i++) {
-        var e = active[i];
+      for (var i = 0; i < data.length; i++) {
+        var e = data[i];
         h += '<div class="cart-item" style="cursor:pointer;" onclick="toggleReturnCart(\'' + esc(e.idWyp) + '\',this)">'
-          + '<input type="checkbox" class="wyp-item-check" data-id="' + esc(e.idWyp) + '">'
+          + '<input type="checkbox" class="wyp-item-check" data-id="' + esc(e.idWyp) + '"' + (returnCartIds.indexOf(e.idWyp) !== -1 ? ' checked' : '') + '>'
           + '<div style="flex:1;margin-left:10px;">'
           + '<b>' + esc(e.nazwa) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
           + '<br><span style="font-size:13px;color:#636e72;">' + esc(e.kod) + ' | ' + esc(e.dataWyp) + '</span>'
@@ -908,7 +926,12 @@
       container.innerHTML = h;
       document.getElementById('returnCartBar').classList.add('show');
       updateReturnCart();
-      openModal('modalOsobaDetail');
+    }
+
+    function filterOsobaWyp() {
+      var q = document.getElementById('searchOsobaWyp').value;
+      if (!q) { renderOsobaWypList(currentDetailActive); return; }
+      renderOsobaWypList(scoredSearch(currentDetailActive, ['nazwa', 'kod'], q));
     }
     function buildWhatsAppUrl(phone, message) {
       var clean = phone.replace(/[^0-9]/g, '');
@@ -1111,7 +1134,13 @@
         html += '</div>';
 
         html += '<div class="log-card-row">';
-        html += '<span>👤 ' + esc(item.imie) + '</span>';
+        html += '<span onclick="openOsobaDetail(\'' + esc(item.idOsoby) + '\')" style="cursor:pointer;color:#667eea;font-weight:bold;">👤 ' + esc(item.imie) + '</span>';
+        var hasTel = item.telefon && item.telefon.trim().length > 0;
+        if (hasTel) {
+          html += '<span onclick="window.open(buildWhatsAppUrl(\'' + esc(item.telefon) + '\',\'\'),\'_blank\')" style="color:#25d366;cursor:pointer;font-weight:bold;">📞 ' + esc(item.telefon) + '</span>';
+        }
+        html += '</div>';
+        html += '<div class="log-card-row">';
         html += '<span style="color:#636e72;">' + esc(item.kod) + ' · 📅 ' + esc(item.dataWyp) + '</span>';
         html += '</div>';
         html += '</div>';
@@ -1265,24 +1294,32 @@
         container.innerHTML = '<div class="empty-msg">Brak narzędzi w bazie</div>';
         return;
       }
+      var dmgCounts = getDamagedCountByTool();
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var n = data[i];
         var sCls = n.ilosc > 0 ? 'status-available' : 'status-borrowed';
         var sTxt = n.ilosc > 0 ? 'Dostępne: ' + n.ilosc : 'Brak';
         var katBadge = getKategoriaBadge(n.kategoria);
+        var dmg = dmgCounts[n.kod] || 0;
+        var sn = extractSN(n.opis);
         h += '<div class="narz-card">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;gap:8px;">'
-          + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">'
-          + '<b style="font-size:18px;">' + esc(n.nazwa) + '</b>'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:center;gap:8px;">'
+          + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap;">'
+          + '<b style="font-size:16px;">' + esc(n.nazwa) + '</b>'
           + katBadge
+          + (dmg > 0 ? '<span class="status-badge status-borrowed" style="font-size:11px;">⚠ Uszk: ' + dmg + '</span>' : '')
           + '</div>'
           + '<span class="status-badge ' + sCls + '">' + sTxt + '</span>'
           + '</div>'
-          + '<div style="font-size:14px;color:#636e72;">'
+          + '<div style="font-size:13px;color:#636e72;">'
           + 'Kod: ' + esc(n.kod) + ' | Stan: ' + n.ilosc + ' ' + esc(n.jednostka)
-          + (n.opis ? '<br>S/N: ' + esc(n.opis) : '')
-          + '</div></div>';
+          + (sn ? ' | 📋 S/N: ' + esc(sn) : '')
+          + '</div>'
+          + '<div style="margin-top:4px;">'
+          + '<span onclick="openDamageModal(\'' + esc(n.kod) + '\',\'' + esc(n.nazwa) + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">⚠ Zgłoś uszkodzenie</span>'
+          + '</div>'
+          + '</div>';
       }
       container.innerHTML = h;
     }
@@ -1465,7 +1502,7 @@
           + '>'
           + '<div>'
           + '<div style="font-weight:bold;">' + esc(n.nazwa) + ' ' + getKategoriaBadge(n.kategoria) + '</div>'
-          + '<div style="font-size:13px;color:#636e72;">' + esc(n.kod) + '</div>'
+          + '<div style="font-size:13px;color:#636e72;">' + esc(n.kod) + (extractSN(n.opis) ? ' | S/N: ' + esc(extractSN(n.opis)) : '') + '</div>'
           + '</div>'
           + '<span class="status-badge ' + (available > 0 ? 'status-available' : 'status-borrowed') + '">'
           + (available > 0 ? available + ' ' + esc(n.jednostka) : 'Brak')
@@ -1782,6 +1819,64 @@
       }
       return counts;
     }
+
+    /* =========================
+       USZKODZONE
+    ========================= */
+    function getDamagedCountByTool() {
+      var counts = {};
+      for (var i = 0; i < allUszkodzone.length; i++) {
+        var kod = allUszkodzone[i].kodNarzedzia;
+        counts[kod] = (counts[kod] || 0) + (allUszkodzone[i].ilosc || 1);
+      }
+      return counts;
+    }
+
+    function extractSN(opis) {
+      if (!opis) return null;
+      var match = opis.match(/(?:s\/n|sn|serial|nr\.?\s*(?:ser\.?)?)[:\s]+([a-zA-Z0-9\-\/\.]+)/i);
+      return match ? match[1] : null;
+    }
+
+    function openDamageModal(kod, nazwa) {
+      damageKod = kod;
+      damageNazwa = nazwa;
+      document.getElementById('damageNarzInfo').innerHTML = '🔧 <b>' + esc(nazwa) + '</b> (' + esc(kod) + ')';
+      document.getElementById('damageOpis').value = '';
+      document.getElementById('damageIlosc').value = '1';
+      openModal('modalDamage');
+    }
+
+    function submitDamage() {
+      var opis = document.getElementById('damageOpis').value.trim();
+      var ilosc = parseInt(document.getElementById('damageIlosc').value) || 1;
+      if (!opis) { toast("Opisz uszkodzenie", "error"); return; }
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast("Uszkodzenie zgłoszone!", "success");
+            closeModal('modalDamage');
+            loadUszkodzone();
+          } else {
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd: " + err.message, "error");
+        })
+        .addUszkodzone(damageKod, damageNazwa, opis, ilosc);
+    }
+
+    function loadUszkodzone() {
+      google.script.run.withSuccessHandler(function (d) {
+        allUszkodzone = d || [];
+        applyNarzFilters();
+      }).getUszkodzone();
+    }
+
     /* =========================
        PRELOAD
     ========================= */
@@ -1791,6 +1886,7 @@
         .withSuccessHandler(function (data) {
           allOsoby = (data && data.osoby) || [];
           allNarzedzia = (data && data.narzedzia) || [];
+          allUszkodzone = (data && data.uszkodzone) || [];
           renderOsoby(allOsoby);
           applyNarzFilters();
           hideLoading();

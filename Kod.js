@@ -8,6 +8,7 @@ const SPREADSHEET_ID = '1OCm_8VZ1Q-z1sXGsthJKUgHS_H13rdXa9uzGKdNrc6A';
 const SHEET_NARZEDZIA = "Narzędzia";
 const SHEET_OSOBY = "Osoby";
 const SHEET_WYPOZYCZENIA = "Wypożyczenia";
+const SHEET_USZKODZONE = "Uszkodzone";
 
 const COLS_NARZ = {
   KOD: 0,
@@ -90,7 +91,8 @@ function getLog() {
 function getInitialData() {
   return {
     osoby: getOsoby(),
-    narzedzia: getNarzedzia()
+    narzedzia: getNarzedzia(),
+    uszkodzone: getUszkodzone()
   };
 }
 
@@ -404,4 +406,46 @@ function zwiekszStanNarzedzia(kod, ilosc) {
     }
   }
   CacheService.getScriptCache().remove("narzedzia");
+}
+
+// ============================================
+// USZKODZONE
+// ============================================
+
+function getUszkodzone() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get("uszkodzone");
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) { }
+  }
+
+  var sheet = getSheet(SHEET_USZKODZONE);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+
+  var uszkodzone = data.map(function (r) {
+    return {
+      id: String(r[0]),
+      kodNarzedzia: String(r[1] || ''),
+      nazwaNarzedzia: String(r[2] || ''),
+      opisUszkodzenia: String(r[3] || ''),
+      data: formatDate(r[4]),
+      ilosc: Number(r[5]) || 1
+    };
+  });
+
+  try {
+    cache.put("uszkodzone", JSON.stringify(uszkodzone), CACHE_TTL);
+  } catch (e) { }
+  return uszkodzone;
+}
+
+function addUszkodzone(kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, ilosc) {
+  var sheet = getSheet(SHEET_USZKODZONE);
+  var id = generateId('USZ');
+  sheet.appendRow([id, kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, new Date(), Number(ilosc) || 1]);
+  CacheService.getScriptCache().remove("uszkodzone");
+  return { success: true, id: id };
 }
