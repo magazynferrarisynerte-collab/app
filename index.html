@@ -179,6 +179,27 @@
       display: block;
     }
 
+    /* LOG COMPACT */
+    .log-card {
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      border-radius: 14px;
+    }
+
+    .log-card .log-card-row {
+      padding-top: 5px;
+      margin-top: 5px;
+      gap: 6px;
+    }
+
+    .log-card strong {
+      font-size: 15px;
+    }
+
+    .log-card .log-card-row span {
+      font-size: 13px;
+    }
+
     /* LOADING & TOAST */
     .loading {
       position: fixed;
@@ -773,7 +794,8 @@
         </div>
         <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
           oninput="filterWypNarz()" style="height:50px;font-size:18px;margin-bottom:8px;">
-        <div id="wypCollapsedBar" onclick="wypExpandUI()">🛒 Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń</div>
+        <div id="wypCollapsedBar" onclick="wypExpandUI()">🛒 Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
+        </div>
         <div id="wypNarzList"></div>
 
         <div id="wypCartSection">
@@ -811,10 +833,10 @@
     var currentDetailOsoba = null;
 
     var KATEGORIE = {
-      'zuzywalne':        { label: 'Zużywalne',       color: '#f59e0b', bg: '#fef3c7' },
-      'stale':            { label: 'Stałe',            color: '#3b82f6', bg: '#dbeafe' },
+      'zuzywalne': { label: 'Zużywalne', color: '#f59e0b', bg: '#fef3c7' },
+      'stale': { label: 'Stałe', color: '#3b82f6', bg: '#dbeafe' },
       'elektronarzedzia': { label: 'Elektronarzędzia', color: '#8b5cf6', bg: '#ede9fe' },
-      'specjalne':        { label: 'Specjalne',        color: '#ef4444', bg: '#fee2e2' }
+      'specjalne': { label: 'Specjalne', color: '#ef4444', bg: '#fee2e2' }
     };
 
     function getKategoriaBadge(kat) {
@@ -1062,23 +1084,17 @@
         html += '<div class="log-card">';
         html += '<div class="log-card-row" style="border-top:none;margin-top:0;">';
         html += '<strong>' + esc(item.nazwa) + (item.ilosc > 1 ? ' (x' + item.ilosc + ')' : '') + '</strong>';
-        html += '<span style="color:#636e72;font-size:14px;">' + esc(item.kod) + '</span>';
-        html += '</div>';
-
-        html += '<div class="log-card-row">';
-        html += '<span>👤 ' + esc(item.imie) + '</span>';
-        html += '<span style="color:#636e72;font-size:14px;">' + esc(item.telefon) + '</span>';
-        html += '</div>';
-
-        html += '<div class="log-card-row">';
-        html += '<span style="font-size:13px;color:#636e72;">📅 ' + esc(item.dataWyp) + '</span>';
-
         if (!isReturned) {
           html += '<button class="status-badge status-available return-btn" '
             + 'onclick="oddaj(this,\'' + esc(item.idWyp) + '\')">ZWRÓĆ</button>';
         } else {
           html += '<span class="status-badge status-borrowed">ZWRÓCONE</span>';
         }
+        html += '</div>';
+
+        html += '<div class="log-card-row">';
+        html += '<span>👤 ' + esc(item.imie) + '</span>';
+        html += '<span style="color:#636e72;">' + esc(item.kod) + ' · 📅 ' + esc(item.dataWyp) + '</span>';
         html += '</div>';
         html += '</div>';
       }
@@ -1101,24 +1117,21 @@
           if (res && res.success) {
             toast("Zwrot zapisany!", "success");
 
-            // Show WhatsApp button if person has phone
+            // Transform button into WhatsApp if person has phone
             if (logItem && logItem.telefon && logItem.telefon.trim().length > 0) {
-              var card = btn.closest('.log-card');
-              var row = btn.parentElement;
-              btn.remove();
-              var waBtn = document.createElement('button');
-              waBtn.className = 'status-badge status-available';
-              waBtn.style.cssText = 'background:#25d366;color:#fff;border:none;cursor:pointer;font-weight:bold;padding:6px 12px;border-radius:8px;font-size:13px;';
-              waBtn.textContent = '💬 WhatsApp';
-              waBtn.onclick = function () {
+              btn.textContent = '💬 WhatsApp';
+              btn.disabled = false;
+              btn.className = '';
+              btn.style.cssText = 'background:#25d366;color:#fff;border:none;cursor:pointer;font-weight:bold;padding:6px 12px;border-radius:8px;font-size:13px;';
+              btn.setAttribute('onclick', '');
+              btn.onclick = function () {
                 var msg = 'Potwierdzenie zwrotu:\n- ' + logItem.nazwa + (logItem.ilosc > 1 ? ' (x' + logItem.ilosc + ')' : '') + '\n\nDziękujemy!';
                 window.open(buildWhatsAppUrl(logItem.telefon, msg), '_blank');
-                waBtn.textContent = '✓ Wysłano';
-                waBtn.disabled = true;
-                waBtn.style.background = '#b2bec3';
+                btn.textContent = '✓ Wysłano';
+                btn.disabled = true;
+                btn.style.background = '#b2bec3';
                 setTimeout(function () { loadLog(); }, 1500);
               };
-              row.appendChild(waBtn);
             } else {
               loadLog();
             }
