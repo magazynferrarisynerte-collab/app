@@ -708,6 +708,8 @@
         <button class="close-btn" onclick="closeModal('modalOsobaDetail')">&times;</button>
       </div>
       <div id="osobaDetailInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
+      <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
+        style="display:none;height:50px;font-size:16px;margin-bottom:15px;">💬 Wyślij stan wypożyczeń WhatsApp</button>
       <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
       <div id="osobaWypList"></div>
       <div class="return-cart-bar" id="returnCartBar">
@@ -882,6 +884,9 @@
         return e.idOsoby === idOsoby && !e.dataZwrotu;
       });
 
+      var hasPhone = currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
+      document.getElementById('osobaWhatsStanBtn').style.display = (hasPhone && active.length > 0) ? 'flex' : 'none';
+
       var container = document.getElementById('osobaWypList');
       if (!active.length) {
         container.innerHTML = '<div class="empty-msg">Brak aktywnych wypożyczeń</div>';
@@ -909,6 +914,19 @@
       var clean = phone.replace(/[^0-9]/g, '');
       if (clean.length === 9) clean = '48' + clean;
       return 'https://wa.me/' + clean + '?text=' + encodeURIComponent(message);
+    }
+
+    function sendWhatsAppStan() {
+      if (!currentDetailOsoba || !currentDetailOsoba.telefon) return;
+      var active = allLogEntries.filter(function (e) {
+        return e.idOsoby === currentDetailOsoba.id && !e.dataZwrotu;
+      });
+      if (!active.length) { toast('Brak aktywnych wypożyczeń', 'error'); return; }
+      var items = active.map(function (e) {
+        return '- ' + e.nazwa + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + ' (' + e.dataWyp + ')';
+      });
+      var msg = 'Aktualny stan wypożyczeń (' + currentDetailOsoba.imie + '):\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+      window.open(buildWhatsAppUrl(currentDetailOsoba.telefon, msg), '_blank');
     }
 
     function sendWhatsAppReturn() {
