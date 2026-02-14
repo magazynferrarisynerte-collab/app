@@ -15,7 +15,7 @@ const COLS_NARZ = {
   OPIS: 2,
   ILOSC: 3,
   JEDNOSTKA: 4,
-  STATUS: 5
+  KATEGORIA: 5
 };
 
 // ============================================
@@ -67,7 +67,7 @@ function getLog() {
 
   var data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
 
-  return data.map(function(r) {
+  return data.map(function (r) {
     return {
       idWyp: String(r[0]),
       kod: String(r[1] || ''),
@@ -80,7 +80,7 @@ function getLog() {
       dataZwrotu: formatDate(r[8]),
       ilosc: Number(r[9]) || 1
     };
-  }).sort(function(a, b) {
+  }).sort(function (a, b) {
     var aDate = a.dataZwrotu || a.dataWyp || '';
     var bDate = b.dataZwrotu || b.dataWyp || '';
     return bDate.localeCompare(aDate);
@@ -111,13 +111,13 @@ function getOsoby() {
 
   var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
 
-  var osoby = data.map(function(r) {
+  var osoby = data.map(function (r) {
     return {
       id: String(r[0]),
       imie: String(r[1] || ''),
       telefon: String(r[2] || '')
     };
-  }).sort(function(a, b) {
+  }).sort(function (a, b) {
     return a.imie.localeCompare(b.imie);
   });
 
@@ -143,7 +143,7 @@ function getNarzedzia() {
   var cache = CacheService.getScriptCache();
   var cached = cache.get("narzedzia");
   if (cached) {
-    try { return JSON.parse(cached); } catch(e) {}
+    try { return JSON.parse(cached); } catch (e) { }
   }
 
   var sheet = getSheet(SHEET_NARZEDZIA);
@@ -152,28 +152,29 @@ function getNarzedzia() {
 
   var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
 
-  var narzedzia = data.map(function(r) {
+  var narzedzia = data.map(function (r) {
     return {
       kod: String(r[COLS_NARZ.KOD]),
       nazwa: String(r[COLS_NARZ.NAZWA]),
       opis: String(r[COLS_NARZ.OPIS] || ''),
       ilosc: Number(r[COLS_NARZ.ILOSC]) || 0,
-      jednostka: String(r[COLS_NARZ.JEDNOSTKA] || 'szt.')
+      jednostka: String(r[COLS_NARZ.JEDNOSTKA] || 'szt.'),
+      kategoria: String(r[COLS_NARZ.KATEGORIA] || '')
     };
-  }).sort(function(a, b) {
+  }).sort(function (a, b) {
     return a.nazwa.localeCompare(b.nazwa);
   });
 
   try {
     cache.put("narzedzia", JSON.stringify(narzedzia), CACHE_TTL);
-  } catch(e) {}
+  } catch (e) { }
   return narzedzia;
 }
 
-function addNarzedzie(kod, nazwa, ilosc) {
+function addNarzedzie(kod, nazwa, ilosc, kategoria) {
   var sheet = getSheet(SHEET_NARZEDZIA);
   var finalKod = kod && kod.trim() ? kod.trim() : generateId('NZ');
-  sheet.appendRow([finalKod, nazwa.trim(), '', Number(ilosc) || 1, 'szt.', 'dostępne']);
+  sheet.appendRow([finalKod, nazwa.trim(), '', Number(ilosc) || 1, 'szt.', kategoria || '']);
   CacheService.getScriptCache().remove("narzedzia");
   return { success: true, kod: finalKod };
 }
@@ -214,24 +215,24 @@ function wypozyczBatch(idOsoby, items) {
           narzSheet.getRange(i + 1, COLS_NARZ.ILOSC + 1).setValue(stan - qty);
           narzData[i][COLS_NARZ.ILOSC] = stan - qty;
 
-        wypSheet.appendRow([
-                  generateId('W'),              // A: idWyp
-                  kod,                          // B: kod
-                  narzData[i][COLS_NARZ.NAZWA], // C: nazwa
-                  narzData[i][COLS_NARZ.OPIS],  // D: opis
-                  idOsoby,                      // E: idOsoby
-                  osoba.imie,                   // F: imie
-                  osoba.telefon,                // G: telefon
-                  new Date(),                   // H: dataWyp
-                  "",                           // I: dataZwrotu
-                  qty                           // J: ilosc
-                ]);
+          wypSheet.appendRow([
+            generateId('W'),              // A: idWyp
+            kod,                          // B: kod
+            narzData[i][COLS_NARZ.NAZWA], // C: nazwa
+            narzData[i][COLS_NARZ.OPIS],  // D: opis
+            idOsoby,                      // E: idOsoby
+            osoba.imie,                   // F: imie
+            osoba.telefon,                // G: telefon
+            new Date(),                   // H: dataWyp
+            "",                           // I: dataZwrotu
+            qty                           // J: ilosc
+          ]);
 
           break;
         }
       }
     }
-    
+
     CacheService.getScriptCache().remove("narzedzia");
     return { success: true };
 
@@ -270,7 +271,7 @@ function oddajNarzedzie(idWyp) {
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
-    try { lock.releaseLock(); } catch(e){}
+    try { lock.releaseLock(); } catch (e) { }
   }
 }
 function oddajBatch(ids) {
@@ -302,7 +303,7 @@ function oddajBatch(ids) {
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
-    try { lock.releaseLock(); } catch(e){}
+    try { lock.releaseLock(); } catch (e) { }
   }
 }
 function mergeDuplicateNarzedzia() {
@@ -328,13 +329,17 @@ function mergeDuplicateNarzedzia() {
         if (!mergedRows[targetIdx].opis && data[i][COLS_NARZ.OPIS]) {
           mergedRows[targetIdx].opis = String(data[i][COLS_NARZ.OPIS]);
         }
+        if (!mergedRows[targetIdx].kategoria && data[i][COLS_NARZ.KATEGORIA]) {
+          mergedRows[targetIdx].kategoria = String(data[i][COLS_NARZ.KATEGORIA]);
+        }
         toDelete.push(i + 1); // numer wiersza (1-based)
       } else {
         map[key] = i;
         mergedRows[i] = {
           row: i + 1,
           ilosc: Number(data[i][COLS_NARZ.ILOSC]) || 0,
-          opis: String(data[i][COLS_NARZ.OPIS] || '')
+          opis: String(data[i][COLS_NARZ.OPIS] || ''),
+          kategoria: String(data[i][COLS_NARZ.KATEGORIA] || '')
         };
       }
     }
@@ -347,10 +352,13 @@ function mergeDuplicateNarzedzia() {
       if (m.opis) {
         sheet.getRange(m.row, COLS_NARZ.OPIS + 1).setValue(m.opis);
       }
+      if (m.kategoria) {
+        sheet.getRange(m.row, COLS_NARZ.KATEGORIA + 1).setValue(m.kategoria);
+      }
     }
 
     // Usuń duplikaty od dołu żeby nie przesuwać indeksów
-    toDelete.sort(function(a, b) { return b - a; });
+    toDelete.sort(function (a, b) { return b - a; });
     for (var d = 0; d < toDelete.length; d++) {
       sheet.deleteRow(toDelete[d]);
     }
@@ -360,7 +368,7 @@ function mergeDuplicateNarzedzia() {
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
-    try { lock.releaseLock(); } catch(e){}
+    try { lock.releaseLock(); } catch (e) { }
   }
 }
 function onEditMergeNarzedzia(e) {
@@ -368,12 +376,12 @@ function onEditMergeNarzedzia(e) {
     var sheet = e.source.getActiveSheet();
     if (sheet.getName() !== SHEET_NARZEDZIA) return;
     mergeDuplicateNarzedzia();
-  } catch(err) {}
+  } catch (err) { }
 }
 function setupMergeTrigger() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   // Usuń stare triggery tej funkcji
-  ScriptApp.getProjectTriggers().forEach(function(t) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'onEditMergeNarzedzia') {
       ScriptApp.deleteTrigger(t);
     }

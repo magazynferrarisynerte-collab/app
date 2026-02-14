@@ -120,12 +120,63 @@
 
     #modalWypozycz .picker-item {
       background: #ffffff;
+      padding: 10px 12px;
+      font-size: 15px;
     }
 
     #modalWypozycz #wypNarzList {
       background: #ffffff;
       border-radius: 15px;
-      padding: 5px 0;
+      padding: 2px 0;
+    }
+
+    #modalWypozycz .cart-item {
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    #modalWypozycz .qty-btn {
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+    }
+
+    #modalWypozycz .qty-val {
+      font-size: 16px;
+      min-width: 24px;
+    }
+
+    #modalWypozycz .remove-cart-btn {
+      width: 28px;
+      height: 28px;
+      font-size: 16px;
+    }
+
+    #wypStep2.narz-collapsed #wypPersonBar,
+    #wypStep2.narz-collapsed #wypCartSection {
+      display: none !important;
+    }
+
+    #wypStep2.narz-collapsed #wypNarzSearch {
+      margin-bottom: 5px;
+    }
+
+    #wypStep2 #wypCollapsedBar {
+      display: none;
+      background: #667eea;
+      color: white;
+      padding: 8px 15px;
+      border-radius: 10px;
+      margin-bottom: 5px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    #wypStep2.narz-collapsed #wypCollapsedBar {
+      display: block;
     }
 
     /* LOADING & TOAST */
@@ -618,6 +669,13 @@
     <button class="btn btn-primary" onclick="mergeNarzedzia()" style="height:50px;font-size:16px;margin-bottom:15px;">🔄
       Scal duplikaty</button>
     <input type="text" class="search-input" id="searchNarzedzia" placeholder="Szukaj narzędzia...">
+    <div id="narzKatFilters" style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;">
+      <button class="filter-btn active" onclick="filterNarzKategoria('all',this)">Wszystkie</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('zuzywalne',this)">Zużywalne</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('stale',this)">Stałe</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('elektronarzedzia',this)">Elektro</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('specjalne',this)">Specjalne</button>
+    </div>
     <div id="narzedziaList"></div>
     <button class="fab" onclick="openAddNarzedzieModal()">+</button>
   </div>
@@ -678,6 +736,14 @@
       <input type="text" class="form-input" id="newNarzNazwa" placeholder="np. Wiertarka Bosch">
       <label class="form-label">Ilość</label>
       <input type="number" class="form-input" id="newNarzIlosc" value="1" min="1">
+      <label class="form-label">Kategoria</label>
+      <select class="form-input" id="newNarzKategoria" style="height:60px;">
+        <option value="">— Wybierz kategorię —</option>
+        <option value="zuzywalne">Zużywalne</option>
+        <option value="stale">Stałe</option>
+        <option value="elektronarzedzia">Elektronarzędzia</option>
+        <option value="specjalne">Specjalne</option>
+      </select>
       <button class="btn btn-primary" onclick="addNarzedzie()">Dodaj do bazy</button>
     </div>
   </div>
@@ -699,20 +765,28 @@
 
       <!-- KROK 2: Wybór narzędzi -->
       <div id="wypStep2" style="display:none">
-        <div
-          style="background: #eef2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-          <span>👤 <b id="wypPersonName"></b></span>
+        <div id="wypPersonBar"
+          style="background: #eef2f7; padding: 10px 15px; border-radius: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size:15px;">👤 <b id="wypPersonName"></b></span>
           <button onclick="wypChangeOsoba()"
-            style="color: #667eea; border:none; background:none; font-weight:bold; font-size:16px; cursor:pointer;">Zmień</button>
+            style="color: #667eea; border:none; background:none; font-weight:bold; font-size:14px; cursor:pointer;">Zmień</button>
         </div>
         <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
-          oninput="filterWypNarz()">
+          oninput="filterWypNarz()" style="height:50px;font-size:18px;margin-bottom:8px;">
+        <div id="wypCollapsedBar" onclick="wypExpandUI()">🛒 Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń</div>
         <div id="wypNarzList"></div>
 
-        <div style="font-weight: bold; margin: 15px 0 10px; font-size: 18px;">🛒 KOSZYK:</div>
-        <div id="wypCart"></div>
-        <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit()" style="margin-top: 15px;"
-          disabled>Zatwierdź wypożyczenie</button>
+        <div id="wypCartSection">
+          <div style="font-weight: bold; margin: 10px 0 6px; font-size: 16px;">🛒 KOSZYK:</div>
+          <div id="wypCart"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit(false)"
+              style="flex:1;height:60px;font-size:17px;" disabled>Pożycz</button>
+            <button class="btn" id="wypWhatsBtn" onclick="wypSubmit(true)"
+              style="flex:1;height:60px;font-size:17px;background:#25d366;color:white;box-shadow:0 5px 0 #1da851;display:none;"
+              disabled>💬 WhatsApp</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -732,8 +806,22 @@
        POMOCNICZE
     ========================= */
     var currentLogFilter = 'active';
+    var currentNarzKategoria = 'all';
     var returnCartIds = [];
     var currentDetailOsoba = null;
+
+    var KATEGORIE = {
+      'zuzywalne':        { label: 'Zużywalne',       color: '#f59e0b', bg: '#fef3c7' },
+      'stale':            { label: 'Stałe',            color: '#3b82f6', bg: '#dbeafe' },
+      'elektronarzedzia': { label: 'Elektronarzędzia', color: '#8b5cf6', bg: '#ede9fe' },
+      'specjalne':        { label: 'Specjalne',        color: '#ef4444', bg: '#fee2e2' }
+    };
+
+    function getKategoriaBadge(kat) {
+      var k = KATEGORIE[kat];
+      if (!k) return '';
+      return '<span style="background:' + k.bg + ';color:' + k.color + ';padding:3px 8px;border-radius:8px;font-size:12px;font-weight:bold;">' + k.label + '</span>';
+    }
 
     function mergeNarzedzia() {
       showLoading();
@@ -879,7 +967,7 @@
 
     function filterLogStatus(status, btn) {
       currentLogFilter = status;
-      document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.parentElement.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       applyLogFilters();
     }
@@ -1002,11 +1090,39 @@
       btn.textContent = "ODDAJĘ...";
       btn.disabled = true;
 
+      // Find the log entry before it gets reloaded
+      var logItem = null;
+      for (var i = 0; i < allLogEntries.length; i++) {
+        if (allLogEntries[i].idWyp === id) { logItem = allLogEntries[i]; break; }
+      }
+
       google.script.run
         .withSuccessHandler(function (res) {
           if (res && res.success) {
             toast("Zwrot zapisany!", "success");
-            loadLog();
+
+            // Show WhatsApp button if person has phone
+            if (logItem && logItem.telefon && logItem.telefon.trim().length > 0) {
+              var card = btn.closest('.log-card');
+              var row = btn.parentElement;
+              btn.remove();
+              var waBtn = document.createElement('button');
+              waBtn.className = 'status-badge status-available';
+              waBtn.style.cssText = 'background:#25d366;color:#fff;border:none;cursor:pointer;font-weight:bold;padding:6px 12px;border-radius:8px;font-size:13px;';
+              waBtn.textContent = '💬 WhatsApp';
+              waBtn.onclick = function () {
+                var msg = 'Potwierdzenie zwrotu:\n- ' + logItem.nazwa + (logItem.ilosc > 1 ? ' (x' + logItem.ilosc + ')' : '') + '\n\nDziękujemy!';
+                window.open(buildWhatsAppUrl(logItem.telefon, msg), '_blank');
+                waBtn.textContent = '✓ Wysłano';
+                waBtn.disabled = true;
+                waBtn.style.background = '#b2bec3';
+                setTimeout(function () { loadLog(); }, 1500);
+              };
+              row.appendChild(waBtn);
+            } else {
+              loadLog();
+            }
+
             loadNarzedziaBackground();
           } else {
             toast("Błąd zwrotu", "error");
@@ -1097,7 +1213,7 @@
       showLoading();
       google.script.run.withSuccessHandler(function (d) {
         allNarzedzia = d || [];
-        renderNarzedzia(allNarzedzia);
+        applyNarzFilters();
         hideLoading();
       }).withFailureHandler(function () {
         hideLoading();
@@ -1108,7 +1224,7 @@
     function loadNarzedziaBackground() {
       google.script.run.withSuccessHandler(function (d) {
         allNarzedzia = d || [];
-        renderNarzedzia(allNarzedzia);
+        applyNarzFilters();
       }).getNarzedzia();
     }
 
@@ -1123,9 +1239,13 @@
         var n = data[i];
         var sCls = n.ilosc > 0 ? 'status-available' : 'status-borrowed';
         var sTxt = n.ilosc > 0 ? 'Dostępne: ' + n.ilosc : 'Brak';
+        var katBadge = getKategoriaBadge(n.kategoria);
         h += '<div class="narz-card">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;">'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;gap:8px;">'
+          + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">'
           + '<b style="font-size:18px;">' + esc(n.nazwa) + '</b>'
+          + katBadge
+          + '</div>'
           + '<span class="status-badge ' + sCls + '">' + sTxt + '</span>'
           + '</div>'
           + '<div style="font-size:14px;color:#636e72;">'
@@ -1140,6 +1260,7 @@
       document.getElementById('newNarzKod').value = '';
       document.getElementById('newNarzNazwa').value = '';
       document.getElementById('newNarzIlosc').value = '1';
+      document.getElementById('newNarzKategoria').value = '';
       openModal('modalAddNarzedzie');
     }
 
@@ -1147,6 +1268,7 @@
       var kod = document.getElementById('newNarzKod').value.trim();
       var nazwa = document.getElementById('newNarzNazwa').value.trim();
       var ilosc = parseInt(document.getElementById('newNarzIlosc').value) || 1;
+      var kategoria = document.getElementById('newNarzKategoria').value;
 
       if (!nazwa) { toast("Podaj nazwę narzędzia", "error"); return; }
 
@@ -1166,7 +1288,7 @@
           hideLoading();
           toast("Błąd: " + err.message, "error");
         })
-        .addNarzedzie(kod, nazwa, ilosc);
+        .addNarzedzie(kod, nazwa, ilosc, kategoria);
     }
 
     /* =========================
@@ -1182,11 +1304,30 @@
       renderOsoby(scoredSearch(allOsoby, ['imie', 'telefon'], q));
     });
 
-    document.getElementById("searchNarzedzia").addEventListener("input", function (e) {
-      var q = e.target.value;
-      if (!q) { renderNarzedzia(allNarzedzia); return; }
-      renderNarzedzia(scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis'], q));
+    document.getElementById("searchNarzedzia").addEventListener("input", function () {
+      applyNarzFilters();
     });
+
+    function filterNarzKategoria(kat, btn) {
+      currentNarzKategoria = kat;
+      document.getElementById('narzKatFilters').querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyNarzFilters();
+    }
+
+    function applyNarzFilters() {
+      var q = document.getElementById('searchNarzedzia').value;
+      var filtered = allNarzedzia;
+
+      if (currentNarzKategoria !== 'all') {
+        filtered = filtered.filter(function (n) { return n.kategoria === currentNarzKategoria; });
+      }
+
+      if (q) {
+        filtered = scoredSearch(filtered, ['nazwa', 'kod', 'opis', 'kategoria'], q);
+      }
+      renderNarzedzia(filtered);
+    }
 
     /* =========================
        MODAL WYPOŻYCZENIA
@@ -1235,10 +1376,33 @@
       document.getElementById('wypPersonName').textContent = name;
       document.getElementById('wypStep1').style.display = 'none';
       document.getElementById('wypStep2').style.display = 'flex';
+      document.getElementById('wypStep2').classList.remove('narz-collapsed');
       document.getElementById('wypNarzSearch').value = '';
       wypCartItems = [];
+      // Show/hide WhatsApp button based on phone
+      var osoba = null;
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].id === id) { osoba = allOsoby[i]; break; }
+      }
+      var hasPhone = osoba && osoba.telefon && osoba.telefon.trim().length > 0;
+      document.getElementById('wypWhatsBtn').style.display = hasPhone ? 'block' : 'none';
       renderWypNarzList(allNarzedzia);
       renderWypCart();
+      // Scroll collapse listener
+      var narzList = document.getElementById('wypNarzList');
+      narzList.onscroll = function () {
+        var step2 = document.getElementById('wypStep2');
+        if (narzList.scrollTop > 30) {
+          if (!step2.classList.contains('narz-collapsed')) {
+            step2.classList.add('narz-collapsed');
+            document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+          }
+        }
+      };
+    }
+
+    function wypExpandUI() {
+      document.getElementById('wypStep2').classList.remove('narz-collapsed');
     }
 
     function wypChangeOsoba() {
@@ -1269,7 +1433,7 @@
           + (disabled ? '' : ' data-kod="' + esc(n.kod) + '" data-max="' + n.ilosc + '" onclick="wypAddToCartByKod(this)"')
           + '>'
           + '<div>'
-          + '<div style="font-weight:bold;">' + esc(n.nazwa) + '</div>'
+          + '<div style="font-weight:bold;">' + esc(n.nazwa) + ' ' + getKategoriaBadge(n.kategoria) + '</div>'
           + '<div style="font-size:13px;color:#636e72;">' + esc(n.kod) + '</div>'
           + '</div>'
           + '<span class="status-badge ' + (available > 0 ? 'status-available' : 'status-borrowed') + '">'
@@ -1293,7 +1457,7 @@
     function filterWypNarz() {
       var q = document.getElementById('wypNarzSearch').value;
       if (!q) { renderWypNarzList(allNarzedzia); return; }
-      renderWypNarzList(scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis'], q));
+      renderWypNarzList(scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis', 'kategoria'], q));
     }
 
     function wypAddToCart(kod, nazwa, maxQty) {
@@ -1315,7 +1479,7 @@
     function getFilteredNarz() {
       var q = document.getElementById('wypNarzSearch').value;
       if (!q) return allNarzedzia;
-      return scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis'], q);
+      return scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis', 'kategoria'], q);
     }
 
     function wypCartChangeQty(kod, delta) {
@@ -1348,14 +1512,19 @@
     function renderWypCart() {
       var container = document.getElementById('wypCart');
       var btn = document.getElementById('wypSubmitBtn');
+      var whatsBtn = document.getElementById('wypWhatsBtn');
+      var collapsedCount = document.getElementById('wypCollapsedCount');
+      if (collapsedCount) collapsedCount.textContent = wypCartItems.length;
 
       if (!wypCartItems.length) {
-        container.innerHTML = '<div class="empty-msg" style="padding:15px;">Koszyk pusty — kliknij narzędzie powyżej</div>';
+        container.innerHTML = '<div class="empty-msg" style="padding:10px;">Koszyk pusty — kliknij narzędzie powyżej</div>';
         btn.disabled = true;
+        if (whatsBtn) whatsBtn.disabled = true;
         return;
       }
 
       btn.disabled = false;
+      if (whatsBtn && whatsBtn.style.display !== 'none') whatsBtn.disabled = false;
       var h = '';
       for (var i = 0; i < wypCartItems.length; i++) {
         var c = wypCartItems[i];
@@ -1381,7 +1550,7 @@
       var kod = el.getAttribute('data-kod');
       wypRemoveFromCart(kod);
     }
-    function wypSubmit() {
+    function wypSubmit(sendWhatsApp) {
       if (!wypOsobaId || !wypCartItems.length) {
         toast("Wybierz osobę i dodaj narzędzia", "error");
         return;
@@ -1391,25 +1560,31 @@
         return { kod: c.kod, qty: c.qty };
       });
 
+      var savedCart = wypCartItems.slice();
+      var savedOsobaId = wypOsobaId;
+
       showLoading();
       document.getElementById('wypSubmitBtn').disabled = true;
+      var whatsBtn = document.getElementById('wypWhatsBtn');
+      if (whatsBtn) whatsBtn.disabled = true;
 
       google.script.run
         .withSuccessHandler(function (res) {
           hideLoading();
           if (res && res.success) {
             toast("Wypożyczenie zapisane!", "success");
-            // WhatsApp
-            var osoba = null;
-            for (var i = 0; i < allOsoby.length; i++) {
-              if (allOsoby[i].id === wypOsobaId) { osoba = allOsoby[i]; break; }
-            }
-            if (osoba && osoba.telefon && osoba.telefon.trim()) {
-              var items = wypCartItems.map(function (c) {
-                return '- ' + c.nazwa + (c.qty > 1 ? ' (x' + c.qty + ')' : '');
-              });
-              var msg = 'Potwierdzenie wypożyczenia:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
-              window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
+            if (sendWhatsApp) {
+              var osoba = null;
+              for (var i = 0; i < allOsoby.length; i++) {
+                if (allOsoby[i].id === savedOsobaId) { osoba = allOsoby[i]; break; }
+              }
+              if (osoba && osoba.telefon && osoba.telefon.trim()) {
+                var cartItems = savedCart.map(function (c) {
+                  return '- ' + c.nazwa + (c.qty > 1 ? ' (x' + c.qty + ')' : '');
+                });
+                var msg = 'Potwierdzenie wypożyczenia:\n' + cartItems.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+                window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
+              }
             }
             closeModal('modalWypozycz');
             wypCartItems = [];
@@ -1418,12 +1593,14 @@
           } else {
             toast("Błąd: " + (res.error || 'Nieznany'), "error");
             document.getElementById('wypSubmitBtn').disabled = false;
+            if (whatsBtn) whatsBtn.disabled = false;
           }
         })
         .withFailureHandler(function (err) {
           hideLoading();
           toast("Błąd: " + err.message, "error");
           document.getElementById('wypSubmitBtn').disabled = false;
+          if (whatsBtn) whatsBtn.disabled = false;
         })
         .wypozyczBatch(wypOsobaId, items);
     }
@@ -1584,7 +1761,7 @@
           allOsoby = (data && data.osoby) || [];
           allNarzedzia = (data && data.narzedzia) || [];
           renderOsoby(allOsoby);
-          renderNarzedzia(allNarzedzia);
+          applyNarzFilters();
           hideLoading();
           loadLog();
         })
