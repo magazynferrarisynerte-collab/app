@@ -24,8 +24,8 @@
       position: sticky;
       bottom: 0;
       background: white;
-      padding: 15px;
-      border-top: 2px solid #eee;
+      padding: 6px 10px;
+      border-top: 1px solid #eee;
       display: none;
     }
 
@@ -253,18 +253,19 @@
 
     .toast {
       position: fixed;
-      bottom: 130px;
+      bottom: 70px;
       left: 50%;
       transform: translateX(-50%);
       background: #333;
       color: white;
-      padding: 15px 30px;
-      border-radius: 50px;
+      padding: 10px 20px;
+      border-radius: 12px;
       font-weight: bold;
+      font-size: 14px;
       z-index: 15000;
       display: none;
       text-align: center;
-      width: 80%;
+      max-width: 80%;
     }
 
     .toast.show {
@@ -866,22 +867,26 @@
         <div class="modal-title" id="osobaDetailTitle">Wypożyczenia</div>
         <button class="close-btn" onclick="closeModal('modalOsobaDetail')">&times;</button>
       </div>
-      <div id="osobaDetailInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
-      <div style="display:flex;gap:10px;margin-bottom:15px;">
+      <div id="osobaDetailInfo"
+        style="background:#eef2f7;padding:8px 12px;border-radius:10px;margin-bottom:8px;font-size:14px;"></div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
         <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
-          style="display:none;height:50px;font-size:16px;flex:1;">WhatsApp — stan</button>
+          style="display:none;height:36px;font-size:13px;flex:1;border-radius:10px;">WhatsApp — stan</button>
         <button class="btn btn-primary" onclick="showRaportOsoby()"
-          style="height:50px;font-size:16px;flex:1;margin-bottom:0;">Drukuj / CSV</button>
+          style="height:36px;font-size:13px;flex:1;margin-bottom:0;border-radius:10px;">Drukuj / CSV</button>
       </div>
-      <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
+      <div style="font-weight:bold;margin-bottom:6px;font-size:14px;">Aktywne wypożyczenia:</div>
       <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..."
-        oninput="filterOsobaWyp()" style="height:50px;font-size:16px;margin-bottom:10px;">
+        oninput="filterOsobaWyp()" style="height:40px;font-size:14px;margin-bottom:6px;">
       <div id="osobaWypList"></div>
       <div class="return-cart-bar" id="returnCartBar">
-        <div style="font-weight:bold;margin-bottom:10px;">Zaznaczono: <span id="returnCartCount">0</span></div>
-        <button class="btn btn-danger" id="returnCartBtn" onclick="returnCartSubmit()">Zwróć zaznaczone</button>
-        <button class="whatsapp-btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()" style="display:none;">WhatsApp
-          — potwierdzenie zwrotu</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:12px;font-weight:bold;">Zaznaczono: <span id="returnCartCount">0</span></span>
+          <button class="btn btn-danger" id="returnCartBtn" onclick="returnCartSubmit()"
+            style="padding:6px 14px;font-size:12px;height:auto;min-height:0;border-radius:8px;box-shadow:none;margin:0;">Zwróć</button>
+          <button class="btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()"
+            style="display:none;padding:6px 10px;font-size:12px;height:auto;min-height:0;border-radius:8px;background:#25d366;color:white;box-shadow:none;margin:0;">WhatsApp</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1060,9 +1065,15 @@
         <div id="wypNarzList" ontouchstart="document.getElementById('wypNarzSearch').blur()"></div>
 
         <div id="wypCartSection">
-          <div id="wypBackToNarz" onclick="wypCollapseToNarz()"
-            style="background:#667eea;color:white;padding:8px 15px;border-radius:10px;margin-bottom:6px;font-weight:bold;font-size:14px;cursor:pointer;text-align:center;">
-            ← Dodaj więcej narzędzi
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <div onclick="wypCollapseToNarz()"
+              style="flex:1;background:#667eea;color:white;padding:8px 12px;border-radius:10px;font-weight:bold;font-size:14px;cursor:pointer;text-align:center;">
+              ← Dodaj więcej
+            </div>
+            <div onclick="wypClearCart()"
+              style="background:#ef4444;color:white;padding:8px 12px;border-radius:10px;font-weight:bold;font-size:14px;cursor:pointer;text-align:center;">
+              Opróżnij
+            </div>
           </div>
           <div id="wypCart"></div>
         </div>
@@ -1183,12 +1194,13 @@
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var e = data[i];
-        h += '<div class="cart-item" style="cursor:pointer;" onclick="toggleReturnCart(\'' + esc(e.idOp) + '\',this)">'
-          + '<input type="checkbox" class="wyp-item-check" data-id="' + esc(e.idOp) + '"' + (returnCartIds.indexOf(e.idOp) !== -1 ? ' checked' : '') + '>'
-          + '<div style="flex:1;margin-left:10px;">'
-          + '<b>' + esc(e.nazwaSys) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
-          + (e.sn ? '<br><span style="font-size:13px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
-          + '<br><span style="font-size:13px;color:#636e72;">' + esc(e.dataWydania) + ' ' + getKategoriaBadge(e.kategoria) + '</span>'
+        var detailName = simplifyName(e.nazwaSys) || e.nazwaSys;
+        h += '<div class="cart-item" style="cursor:pointer;padding:8px 10px;margin-bottom:3px;border-radius:10px;" onclick="toggleReturnCart(\'' + esc(e.idOp) + '\',this)">'
+          + '<input type="checkbox" class="wyp-item-check" style="width:20px;height:20px;" data-id="' + esc(e.idOp) + '"' + (returnCartIds.indexOf(e.idOp) !== -1 ? ' checked' : '') + '>'
+          + '<div style="flex:1;margin-left:8px;">'
+          + '<b style="font-size:13px;">' + esc(detailName) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
+          + (e.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
+          + ' <span style="font-size:11px;color:#636e72;">' + esc(e.dataWydania) + '</span> ' + getKategoriaBadge(e.kategoria)
           + '</div></div>';
       }
       container.innerHTML = h;
@@ -1269,7 +1281,7 @@
       document.getElementById('returnCartCount').textContent = returnCartIds.length;
       document.getElementById('returnCartBtn').disabled = returnCartIds.length === 0;
       var hasPhone = currentDetailOsoba && currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
-      document.getElementById('returnWhatsBtn').style.display = (hasPhone && returnCartIds.length > 0) ? 'flex' : 'none';
+      document.getElementById('returnWhatsBtn').style.display = (hasPhone && returnCartIds.length > 0) ? 'inline-block' : 'none';
     }
 
     function returnCartSubmit() {
@@ -1355,14 +1367,14 @@
           } else {
             toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
             document.getElementById('returnCartBtn').disabled = false;
-            document.getElementById('returnCartBtn').textContent = 'Zwróć zaznaczone';
+            document.getElementById('returnCartBtn').textContent = 'Zwróć';
             loadLogBackground();
           }
         })
         .withFailureHandler(function (err) {
           toast('Błąd: ' + err.message, 'error');
           document.getElementById('returnCartBtn').disabled = false;
-          document.getElementById('returnCartBtn').textContent = 'Zwróć zaznaczone';
+          document.getElementById('returnCartBtn').textContent = 'Zwróć';
           loadLogBackground();
         })
         .zwrocBatch(ids, photoMap);
@@ -1394,12 +1406,13 @@
     function showLoading() { document.getElementById('loading').classList.add('show'); }
     function hideLoading() { document.getElementById('loading').classList.remove('show'); }
 
-    function toast(msg, type) {
+    function toast(msg, type, duration) {
       type = type || 'info';
+      duration = duration || 1500;
       var el = document.getElementById('toast');
       el.textContent = msg;
       el.className = 'toast show ' + type;
-      setTimeout(function () { el.classList.remove('show'); }, 3000);
+      setTimeout(function () { el.classList.remove('show'); }, duration);
     }
 
     function openModal(id) { document.getElementById(id).classList.add('show'); }
@@ -2116,7 +2129,6 @@
       document.getElementById('wypStep2').classList.add('narz-collapsed');
       document.getElementById('wypNarzSearch').value = '';
       document.getElementById('wypWhatsBtn').style.display = 'none';
-      wypCartItems = [];
       resetWypKatFilters();
       renderWypNarzList(allKatalogGrouped);
       renderWypCart();
@@ -2131,7 +2143,6 @@
       document.getElementById('wypStep2').style.display = 'flex';
       document.getElementById('wypStep2').classList.add('narz-collapsed');
       document.getElementById('wypNarzSearch').value = '';
-      wypCartItems = [];
       resetWypKatFilters();
       // Show/hide WhatsApp button based on phone
       var osoba = null;
@@ -2170,13 +2181,19 @@
       renderWypLastAdded();
     }
 
+    function wypClearCart() {
+      wypCartItems = [];
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+      wypCollapseToNarz();
+    }
+
     function wypChangeOsoba() {
       document.getElementById('wypStep1').style.display = 'block';
       document.getElementById('wypStep2').style.display = 'none';
       document.getElementById('wypDynamicFields').style.display = 'none';
       wypOsobaId = null;
       wypOsobaName = '';
-      wypCartItems = [];
     }
 
     function renderWypNarzList(data) {
@@ -2446,9 +2463,10 @@
       for (var i = 0; i < wypCartItems.length; i++) {
         var c = wypCartItems[i];
         var canChangeQty = (c.kategoria !== 'E');
+        var cartName = simplifyName(c.nazwaWys) || c.nazwaWys;
         h += '<div class="cart-item" style="flex-wrap:wrap;padding:6px 8px;margin-bottom:2px;">'
           + '<div style="flex:1;min-width:0;font-size:13px;">'
-          + '<b>' + esc(c.nazwaWys) + '</b>'
+          + '<b>' + esc(cartName) + '</b>'
           + (c.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
           + ' ' + getKategoriaBadge(c.kategoria)
           + '</div>';
