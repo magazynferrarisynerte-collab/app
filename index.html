@@ -2434,24 +2434,39 @@
       }
     }
 
+    var _przesunPending = null;
     function przesunDoZuzywalnych(idKatalog, nazwaWys) {
-      if (!confirm('Przesunąć "' + nazwaWys + '" do kategorii zużywalne?')) return;
-      showLoading();
-      google.script.run
-        .withSuccessHandler(function (res) {
-          hideLoading();
-          if (res && res.success) {
-            toast('Przeniesiono do zużywalnych', 'success');
-            loadKatalog();
-          } else {
-            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
-          }
-        })
-        .withFailureHandler(function (err) {
-          hideLoading();
-          toast('Błąd: ' + err.message, 'error');
-        })
-        .changeKategoria(idKatalog, 'Z');
+      if (_przesunPending && _przesunPending.id === idKatalog) {
+        // Drugie kliknięcie — potwierdzone
+        clearTimeout(_przesunPending.timer);
+        _przesunPending = null;
+
+        // Optymistyczny update
+        for (var i = 0; i < allKatalog.length; i++) {
+          if (allKatalog[i].id === idKatalog) { allKatalog[i].kategoria = 'Z'; break; }
+        }
+        applyNarzFilters();
+        toast('Przeniesiono do zużywalnych', 'success');
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) toast('Błąd zapisu: ' + (res.error || ''), 'error');
+            loadKatalogBackground();
+          })
+          .withFailureHandler(function (err) {
+            toast('Błąd: ' + err.message, 'error');
+            loadKatalogBackground();
+          })
+          .changeKategoria(idKatalog, 'Z');
+      } else {
+        // Pierwsze kliknięcie — czekaj na potwierdzenie
+        if (_przesunPending) clearTimeout(_przesunPending.timer);
+        toast('Kliknij ponownie aby potwierdzić przesunięcie', 'info');
+        _przesunPending = {
+          id: idKatalog,
+          timer: setTimeout(function () { _przesunPending = null; }, 3000)
+        };
+      }
     }
 
     function szybkieWydaj(nazwaWys, kategoria) {
