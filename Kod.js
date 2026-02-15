@@ -746,3 +746,63 @@ function migrateWypozyczenia() {
 
   return { success: true, migrated: count };
 }
+
+// Migracja starych Narzędzi → nowy Katalog
+// Stary format: KOD | NAZWA | OPIS | ILOSC | JEDNOSTKA | KATEGORIA
+function migrateNarzedzia() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var narzSheet = ss.getSheetByName("Narzędzia");
+  if (!narzSheet) return { success: false, error: 'Brak arkusza Narzędzia' };
+
+  var katSheet = ss.getSheetByName(SHEET_KATALOG);
+  if (!katSheet) return { success: false, error: 'Brak arkusza Katalog' };
+
+  var lastRow = narzSheet.getLastRow();
+  if (lastRow < 2) return { success: true, migrated: 0 };
+
+  var data = narzSheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  var count = 0;
+
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    var kod = String(r[0] || '').trim();
+    var nazwa = String(r[1] || '').trim();
+    var opis = String(r[2] || '').trim();
+    var ilosc = Number(r[3]) || 1;
+    var kategoria = String(r[5] || '').trim().toLowerCase();
+
+    if (!kod && !nazwa) continue;
+
+    // Nazwa_Systemowa: "KOD — NAZWA"
+    var nazwaSys = kod ? (kod + ' — ' + nazwa) : nazwa;
+    var nazwaWys = nazwa || kod;
+
+    // Wyciągnij SN z opisu
+    var sn = extractSN(opis);
+    if (sn === opis) sn = '';
+
+    // Normalizuj kategorię
+    if (kategoria === 'zużywalne' || kategoria === 'zuzywalne') kategoria = 'zuzywalne';
+    else if (kategoria === 'stałe' || kategoria === 'stale') kategoria = 'stale';
+    else if (kategoria === 'elektronarzędzia' || kategoria === 'elektronarzedzia') kategoria = 'elektronarzedzia';
+    else if (kategoria === 'specjalne') kategoria = 'specjalne';
+    else if (sn) kategoria = 'elektronarzedzia';
+    else kategoria = 'stale';
+
+    var id = generateId('K');
+
+    katSheet.appendRow([
+      id,           // ID
+      nazwaSys,     // Nazwa_Systemowa
+      nazwaWys,     // Nazwa_Wyswietlana
+      kategoria,    // Kategoria
+      sn,           // SN
+      ilosc,        // Stan_Poczatkowy
+      ilosc         // Aktualnie_Na_Stanie
+    ]);
+    count++;
+  }
+
+  CacheService.getScriptCache().remove("katalog");
+  return { success: true, migrated: count };
+}

@@ -1395,14 +1395,20 @@
         }
         html += '</div>';
 
-        // Row 2: Person + SN
+        // Row 2: Person + Kod/SN + Kategoria
         html += '<div class="log-card-row">';
         if (item.osoba) {
           html += '<span style="color:#667eea;font-weight:bold;">' + esc(item.osoba) + '</span>';
         }
-        if (item.sn) {
-          html += '<span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(item.sn) + '</span>';
+        var kodSn = '';
+        if (item.nazwaSys) {
+          var kodMatch = item.nazwaSys.match(/^([A-Za-z0-9_-]+)/);
+          if (kodMatch) kodSn += '<b style="color:#2d3436;font-size:12px;">' + esc(kodMatch[1]) + '</b>';
         }
+        if (item.sn) {
+          kodSn += (kodSn ? ' | ' : '') + '<span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(item.sn) + '</span>';
+        }
+        if (kodSn) html += '<span>' + kodSn + '</span>';
         html += getKategoriaBadge(item.kategoria);
         html += '</div>';
 
