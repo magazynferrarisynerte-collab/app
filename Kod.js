@@ -379,8 +379,8 @@ function wydajBatch(idOsoby, items) {
         opId2,                                               // ID_Operacji
         new Date(),                                          // Data_Wydania
         osobaImie,                                           // Osoba
-        String(resolved.data[COLS_KATALOG.NAZWA_SYSTEMOWA]), // Nazwa_Systemowa
-        String(resolved.data[COLS_KATALOG.SN] || ''),        // SN
+        String(resolved.data[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''), // Nazwa_Systemowa
+        extractSN(resolved.data[COLS_KATALOG.SN]),                // SN
         qty,                                                 // Ilosc
         item.kategoria,                                      // Kategoria
         status,                                              // Status
@@ -710,19 +710,29 @@ function migrateWypozyczenia() {
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
     var idWyp = String(r[0]);
+    var kod = String(r[1] || '');              // stary KOD narzędzia
     var nazwa = String(r[2] || '');
+    var opis = String(r[3] || '');             // stary OPIS (może zawierać SN)
     var imie = String(r[5] || '');
     var dataWyp = r[7];
     var dataZwr = r[8];
     var ilosc = Number(r[9]) || 1;
     var hasReturn = dataZwr && String(dataZwr).length > 0;
 
+    // Nazwa_Systemowa: "KOD — NAZWA" (jeśli KOD istnieje)
+    var nazwaSys = kod ? (kod + ' — ' + nazwa) : nazwa;
+
+    // Próba wyciągnięcia SN z opisu
+    var sn = extractSN(opis);
+    // Jeśli extractSN zwróciło cały opis (brak prefiksu sn/s/n), nie traktuj jako SN
+    if (sn === opis.trim()) sn = '';
+
     przesSheet.appendRow([
       idWyp,                          // ID_Operacji (zachowujemy stare ID)
       dataWyp || '',                  // Data_Wydania
       imie,                           // Osoba
-      nazwa,                          // Nazwa_Systemowa
-      '',                             // SN
+      nazwaSys,                       // Nazwa_Systemowa (KOD — NAZWA)
+      sn,                             // SN (wyciągnięty z opisu)
       ilosc,                          // Ilosc
       '',                             // Kategoria
       hasReturn ? 'Zwrocone' : 'Wydane', // Status
