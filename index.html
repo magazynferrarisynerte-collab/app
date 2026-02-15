@@ -1310,7 +1310,7 @@
 
     function applyLogFilters() {
       var q = document.getElementById('searchLog').value;
-      var filtered = allLogEntries;
+      var filtered = allLogEntries.filter(function (i) { return i.kategoria !== 'Z'; });
 
       if (currentLogFilter === 'active') {
         filtered = filtered.filter(function (i) { return i.status === 'Wydane'; });
