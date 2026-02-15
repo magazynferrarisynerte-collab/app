@@ -70,6 +70,8 @@ function simplifyToolName(fullName) {
   if (!fullName) return '';
   var name = String(fullName);
 
+  // Usuń kod na początku (np. SYN/6/52, ABC/12/345)
+  name = name.replace(/^[A-Z]{2,}[\/-]\d+[\/-]\d+\s*/i, '');
   // Usuń angielskie nazwy i inne treści w nawiasach
   name = name.replace(/\s*\([^)]*\)\s*/g, ' ');
 

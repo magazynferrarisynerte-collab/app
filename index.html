@@ -1358,7 +1358,11 @@
 
     function simplifyName(fullName) {
       if (!fullName) return '';
-      var name = String(fullName).replace(/\s*\([^)]*\)\s*/g, ' ');
+      var name = String(fullName);
+      // Usuń kod na początku (np. SYN/6/52, ABC/12/345, KOD-123)
+      name = name.replace(/^[A-Z]{2,}[\/-]\d+[\/-]\d+\s*/i, '');
+      // Usuń treść w nawiasach (angielskie nazwy)
+      name = name.replace(/\s*\([^)]*\)\s*/g, ' ');
       var words = name.trim().split(/\s+/);
       var result = [];
       for (var i = 0; i < words.length; i++) {
