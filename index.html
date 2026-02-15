@@ -793,6 +793,8 @@
   <!-- TAB: OSOBY -->
   <div class="tab-content" id="tabOsoby">
     <input type="text" class="search-input" id="searchOsoby" placeholder="Szukaj osoby...">
+    <button class="btn btn-primary" onclick="exportAllContacts()"
+      style="width:100%;height:50px;font-size:14px;margin-bottom:15px;">Eksportuj wszystkie kontakty (.vcf)</button>
     <div id="osobyList"></div>
     <button class="fab" onclick="openAddOsobaModal()">+</button>
   </div>
@@ -811,10 +813,9 @@
     <input type="text" class="search-input" id="searchNarzedzia" placeholder="Szukaj narzędzia...">
     <div id="narzKatFilters" style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;">
       <button class="filter-btn active" onclick="filterNarzKategoria('all',this)">Wszystkie</button>
-      <button class="filter-btn" onclick="filterNarzKategoria('zuzywalne',this)">Zużywalne</button>
-      <button class="filter-btn" onclick="filterNarzKategoria('stale',this)">Stałe</button>
-      <button class="filter-btn" onclick="filterNarzKategoria('elektronarzedzia',this)">Elektro</button>
-      <button class="filter-btn" onclick="filterNarzKategoria('specjalne',this)">Specjalne</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('E',this)">Ewidencjonowane</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('N',this)">Nieewidencjonowane</button>
+      <button class="filter-btn" onclick="filterNarzKategoria('Z',this)">Zużywalne</button>
     </div>
     <div id="narzedziaList"></div>
     <button class="fab" onclick="openAddKatalogModal()">+</button>
@@ -831,6 +832,8 @@
         style="height:60px;font-size:16px;margin-bottom:0;background:#d97706;">Najrzadziej wydawane</button>
       <button class="btn btn-primary" onclick="showRaportInwentaryzacja()"
         style="height:60px;font-size:16px;margin-bottom:0;background:#7c3aed;">Inwentaryzacja — stan magazynu</button>
+      <button class="btn btn-danger" onclick="showRaportUszkodzonych()"
+        style="height:60px;font-size:16px;margin-bottom:0;">Uszkodzone narzędzia</button>
     </div>
   </div>
 
@@ -962,10 +965,9 @@
       <label class="form-label">Kategoria</label>
       <select class="form-input" id="newKatKategoria" onchange="onKatKategoriaChange()" style="height:60px;">
         <option value="">— Wybierz kategorię —</option>
-        <option value="zuzywalne">Zużywalne</option>
-        <option value="stale">Stałe</option>
-        <option value="elektronarzedzia">Elektronarzędzia</option>
-        <option value="specjalne">Specjalne</option>
+        <option value="E">Ewidencjonowane (SN)</option>
+        <option value="N">Nieewidencjonowane</option>
+        <option value="Z">Zużywalne</option>
       </select>
       <label class="form-label">Nazwa systemowa (unikalna)</label>
       <input type="text" class="form-input" id="newKatNazwaSys" placeholder="np. Miara 5m Yato XY123">
@@ -1060,10 +1062,9 @@
     var currentReturnOpId = null;
 
     var KATEGORIE = {
-      'zuzywalne': { label: 'Zużywalne', color: '#f59e0b', bg: '#fef3c7' },
-      'stale': { label: 'Stałe', color: '#3b82f6', bg: '#dbeafe' },
-      'elektronarzedzia': { label: 'Elektronarzędzia', color: '#8b5cf6', bg: '#ede9fe' },
-      'specjalne': { label: 'Specjalne', color: '#ef4444', bg: '#fee2e2' }
+      'E': { label: 'Ewidencjonowane', color: '#8b5cf6', bg: '#ede9fe' },
+      'N': { label: 'Nieewidencjonowane', color: '#3b82f6', bg: '#dbeafe' },
+      'Z': { label: 'Zużywalne', color: '#f59e0b', bg: '#fef3c7' }
     };
 
     var STATUS_STYLES = {
@@ -1215,20 +1216,20 @@
     function returnCartSubmit() {
       if (!returnCartIds.length) return;
 
-      // Check if any are specjalne — collect photos first
-      var specjalneIds = [];
+      // Check if any items had photos at issuance — collect return photos
+      var photoIds = [];
       for (var i = 0; i < returnCartIds.length; i++) {
         for (var j = 0; j < allLogEntries.length; j++) {
-          if (allLogEntries[j].idOp === returnCartIds[i] && allLogEntries[j].kategoria === 'specjalne') {
-            specjalneIds.push(returnCartIds[i]);
+          if (allLogEntries[j].idOp === returnCartIds[i] && allLogEntries[j].zdjecieWydanieUrl) {
+            photoIds.push(returnCartIds[i]);
             break;
           }
         }
       }
 
-      if (specjalneIds.length > 0) {
-        // Need photos for specjalne items — process sequentially
-        collectReturnPhotos(specjalneIds, 0, {});
+      if (photoIds.length > 0) {
+        // Need return photos for items that had issuance photos
+        collectReturnPhotos(photoIds, 0, {});
       } else {
         executeReturnBatch(returnCartIds, {});
       }
@@ -1237,23 +1238,23 @@
     var pendingReturnIds = [];
     var pendingReturnPhotos = {};
 
-    function collectReturnPhotos(specjalneIds, index, photoMap) {
-      if (index >= specjalneIds.length) {
+    function collectReturnPhotos(photoIds, index, photoMap) {
+      if (index >= photoIds.length) {
         executeReturnBatch(returnCartIds, photoMap);
         return;
       }
-      var idOp = specjalneIds[index];
+      var idOp = photoIds[index];
       var entry = null;
       for (var j = 0; j < allLogEntries.length; j++) {
         if (allLogEntries[j].idOp === idOp) { entry = allLogEntries[j]; break; }
       }
-      pendingReturnIds = specjalneIds;
+      pendingReturnIds = photoIds;
       pendingReturnPhotos = photoMap;
 
       document.getElementById('returnPhotoInfo').innerHTML =
-        '<b>' + esc(entry ? entry.nazwaSys : '') + '</b>' +
+        '<b>' + esc(entry ? (simplifyName(entry.nazwaSys) || entry.nazwaSys) : '') + '</b>' +
         (entry && entry.sn ? '<br>SN: ' + esc(entry.sn) : '') +
-        '<br><span style="font-size:13px;">Zdjęcie ' + (index + 1) + ' z ' + specjalneIds.length + '</span>';
+        '<br><span style="font-size:13px;">Zdjęcie ' + (index + 1) + ' z ' + photoIds.length + '</span>';
       document.getElementById('returnPhotoInput').value = '';
       document.getElementById('returnPhotoPreview').innerHTML = '';
       currentReturnOpId = idOp;
@@ -1331,6 +1332,35 @@
       });
     }
 
+    var BRANDS = ['STANLEY','MAKITA','BOSCH','YATO','DEWALT','MILWAUKEE','HILTI','METABO','FESTOOL','STIHL','HUSQVARNA','KARCHER','RYOBI','EINHELL','PARKSIDE','GRAPHITE','DEDRA','TOPEX','VOREL','STHOR','NEO','PROLINE','HOGERT','BAHCO','KNIPEX','WIHA','WERA','IRWIN','TAJIMA','STABILA','WURTH','FISCHER','RAWLPLUG','WOLFCRAFT'];
+    var COLORS_PL = ['ZOLTA','ŻÓŁTA','ZÓŁTA','CZARNA','CZERWONA','ZIELONA','NIEBIESKA','BIALA','BIAŁA','SZARA','POMARANCZOWA','FIOLETOWA','BRAZOWA','BRĄZOWA','SREBRNA','ZLOTA','ZŁOTA'];
+
+    function simplifyName(fullName) {
+      if (!fullName) return '';
+      var name = String(fullName).replace(/\s*\([^)]*\)\s*/g, ' ');
+      var words = name.trim().split(/\s+/);
+      var result = [];
+      for (var i = 0; i < words.length; i++) {
+        var w = words[i], wUp = w.toUpperCase();
+        if (BRANDS.indexOf(wUp) !== -1) continue;
+        if (/^\d{2,}-\d+/.test(w) || /^\d{5,}$/.test(w)) continue;
+        if (COLORS_PL.indexOf(wUp) !== -1) continue;
+        if (/^\d+[Xx]\d+/.test(w)) continue;
+        if (/^\d{3,}[Mm]{1,2}$/.test(w)) continue;
+        result.push(w);
+      }
+      return result.join(' ').trim();
+    }
+
+    function getConsumedCount(nazwaSys) {
+      var count = 0;
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (e.nazwaSys === nazwaSys && e.status === 'Zuzyte') count += e.ilosc;
+      }
+      return count;
+    }
+
     /* =========================
        NAWIGACJA
     ========================= */
@@ -1383,9 +1413,13 @@
 
         html += '<div class="log-card">';
 
-        // Row 1: Name + Status/Action
+        // Row 1: Simplified name + SN + Status
+        var logName = simplifyName(item.nazwaSys) || item.nazwaSys;
         html += '<div class="log-card-row" style="border-top:none;margin-top:0;">';
-        html += '<strong>' + esc(item.nazwaSys) + (item.ilosc > 1 ? ' (x' + item.ilosc + ')' : '') + '</strong>';
+        html += '<strong>' + esc(logName) + (item.ilosc > 1 ? ' (x' + item.ilosc + ')' : '') + '</strong>';
+        if (item.sn) {
+          html += ' <span style="color:#8b5cf6;font-size:12px;font-weight:normal;">SN: ' + esc(item.sn) + '</span>';
+        }
 
         if (item.status === 'Wydane') {
           html += '<button class="status-badge status-available return-btn" '
@@ -1395,20 +1429,14 @@
         }
         html += '</div>';
 
-        // Row 2: Person + Kod/SN + Kategoria
+        // Row 2: Person + original name (as description) + Kategoria
         html += '<div class="log-card-row">';
         if (item.osoba) {
           html += '<span style="color:#667eea;font-weight:bold;">' + esc(item.osoba) + '</span>';
         }
-        var kodSn = '';
-        if (item.nazwaSys) {
-          var kodMatch = item.nazwaSys.match(/^([A-Za-z0-9_-]+)/);
-          if (kodMatch) kodSn += '<b style="color:#2d3436;font-size:12px;">' + esc(kodMatch[1]) + '</b>';
+        if (item.nazwaSys && item.nazwaSys !== logName) {
+          html += '<span style="color:#b2bec3;font-size:11px;">' + esc(item.nazwaSys) + '</span>';
         }
-        if (item.sn) {
-          kodSn += (kodSn ? ' | ' : '') + '<span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(item.sn) + '</span>';
-        }
-        if (kodSn) html += '<span>' + kodSn + '</span>';
         html += getKategoriaBadge(item.kategoria);
         html += '</div>';
 
@@ -1438,11 +1466,11 @@
       }
       if (!logItem) return;
 
-      if (logItem.kategoria === 'specjalne') {
-        // Open return photo modal
+      if (logItem.zdjecieWydanieUrl) {
+        // Item had issuance photo — require return photo
         currentReturnOpId = idOp;
         document.getElementById('returnPhotoInfo').innerHTML =
-          '<b>' + esc(logItem.nazwaSys) + '</b>' +
+          '<b>' + esc(simplifyName(logItem.nazwaSys) || logItem.nazwaSys) + '</b>' +
           (logItem.sn ? '<br>SN: ' + esc(logItem.sn) : '');
         document.getElementById('returnPhotoInput').value = '';
         document.getElementById('returnPhotoPreview').innerHTML = '';
@@ -1546,7 +1574,10 @@
           + '<div style="font-weight:bold;font-size:18px;">' + esc(o.imie) + '</div>'
           + (cnt > 0 ? '<span class="status-badge status-borrowed">Wypożyczone: ' + cnt + '</span>' : '')
           + '</div>'
-          + '<div style="color:#667eea;margin-top:5px;">' + esc(o.telefon) + '</div>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;">'
+          + '<div style="color:#667eea;">' + esc(o.telefon) + '</div>'
+          + (o.telefon ? '<span onclick="event.stopPropagation();saveContact(\'' + esc(o.imie) + '\',\'' + esc(o.telefon) + '\')" style="color:#10b981;cursor:pointer;font-size:12px;white-space:nowrap;">Zapisz kontakt</span>' : '')
+          + '</div>'
           + '</div>';
       }
       container.innerHTML = h;
@@ -1584,6 +1615,52 @@
     }
 
     /* =========================
+       KONTAKTY (vCard)
+    ========================= */
+    function buildVCard(name, phone) {
+      var parts = name.trim().split(/\s+/);
+      var firstName = parts[0] || '';
+      var lastName = parts.slice(1).join(' ') || '';
+      var tel = phone.replace(/\s+/g, '');
+      if (tel && !tel.startsWith('+')) tel = '+48' + tel.replace(/^0/, '');
+      return 'BEGIN:VCARD\r\nVERSION:3.0\r\n'
+        + 'N:' + lastName + ';' + firstName + ';;;\r\n'
+        + 'FN:' + name.trim() + '\r\n'
+        + (tel ? 'TEL;TYPE=CELL:' + tel + '\r\n' : '')
+        + 'ORG:Synerte\r\n'
+        + 'END:VCARD\r\n';
+    }
+
+    function downloadVcf(content, filename) {
+      var blob = new Blob([content], { type: 'text/vcard;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function saveContact(name, phone) {
+      var vcf = buildVCard(name, phone);
+      downloadVcf(vcf, name.replace(/\s+/g, '_') + '.vcf');
+      toast('Pobrano kontakt: ' + name);
+    }
+
+    function exportAllContacts() {
+      var withPhone = allOsoby.filter(function (o) { return o.telefon && o.telefon.trim(); });
+      if (!withPhone.length) { toast('Brak osób z numerem telefonu', 'error'); return; }
+      var vcf = '';
+      for (var i = 0; i < withPhone.length; i++) {
+        vcf += buildVCard(withPhone[i].imie, withPhone[i].telefon);
+      }
+      downloadVcf(vcf, 'Magazyn_kontakty.vcf');
+      toast('Pobrano ' + withPhone.length + ' kontaktów');
+    }
+
+    /* =========================
        KATALOG (NARZĘDZIA)
     ========================= */
     function loadKatalog() {
@@ -1616,13 +1693,24 @@
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var n = data[i];
-        var sCls = n.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
-        var sTxt = n.aktualnieNaStanie > 0 ? 'Dostępne: ' + n.aktualnieNaStanie : 'Brak';
         var katBadge = getKategoriaBadge(n.kategoria);
-        // Tytuł: nazwa + SN dla elektronarzędzi
-        var titleText = esc(n.nazwaWys);
-        if (n.sn && (n.kategoria === 'elektronarzedzia' || n.kategoria === 'specjalne')) {
+
+        // Uproszczona nazwa wyświetlana (bez angielskich, marek itp.)
+        var cleanName = simplifyName(n.nazwaWys) || simplifyName(n.nazwaSys) || n.nazwaWys;
+        var titleText = esc(cleanName);
+        if (n.sn && n.kategoria === 'E') {
           titleText += ' <span style="color:#8b5cf6;font-weight:normal;font-size:13px;">SN: ' + esc(n.sn) + '</span>';
+        }
+
+        // Status: zużywalne pokazuje zużyte, inne — dostępne
+        var sCls, sTxt;
+        if (n.kategoria === 'Z') {
+          var consumed = getConsumedCount(n.nazwaSys);
+          sCls = n.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
+          sTxt = 'Stan: ' + n.aktualnieNaStanie + ' | Zużyto: ' + consumed;
+        } else {
+          sCls = n.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
+          sTxt = n.aktualnieNaStanie > 0 ? 'Dostępne: ' + n.aktualnieNaStanie : 'Brak';
         }
 
         h += '<div class="narz-card">'
@@ -1631,17 +1719,27 @@
           + '<b style="font-size:16px;">' + titleText + '</b>'
           + katBadge
           + '</div>'
-          + '<span class="status-badge ' + sCls + '">' + sTxt + '</span>'
-          + '</div>'
-          + '<div style="font-size:13px;color:#636e72;">'
-          + esc(n.nazwaSys)
-          + ' | Stan: ' + n.aktualnieNaStanie + '/' + n.stanPoczatkowy
-          + '</div>'
-          + '<div style="margin-top:4px;display:flex;gap:15px;">'
-          + '<span onclick="openDamageModal(\'' + esc(n.nazwaSys) + '\',\'' + esc(n.sn) + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">Zgłoś uszkodzenie</span>'
-          + (n.kategoria !== 'zuzywalne' ? '<span onclick="przesunDoZuzywalnych(\'' + esc(n.id) + '\',\'' + esc(n.nazwaWys) + '\')" style="color:#f59e0b;cursor:pointer;font-size:12px;">Przesuń do zużywalnych</span>' : '')
-          + '</div>'
+          + '<span class="status-badge ' + sCls + '" style="white-space:nowrap;">' + sTxt + '</span>'
           + '</div>';
+
+        if (n.kategoria === 'Z') {
+          // Zużywalne: przycisk Wydaj, bez opisu, bez uszkodzeń
+          h += '<div style="margin-top:4px;display:flex;gap:15px;align-items:center;">'
+            + '<span class="status-badge" style="font-size:12px;color:#636e72;">' + n.aktualnieNaStanie + '/' + n.stanPoczatkowy + '</span>'
+            + (n.aktualnieNaStanie > 0 ? '<button onclick="event.stopPropagation();szybkieWydaj(\'' + esc(n.nazwaWys) + '\',\'' + esc(n.kategoria) + '\')" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">Wydaj</button>' : '<span style="color:#ef4444;font-size:12px;">Brak na stanie</span>')
+            + '</div>';
+        } else {
+          h += '<div style="font-size:12px;color:#b2bec3;">'
+            + esc(simplifyName(n.nazwaSys) || n.nazwaSys)
+            + ' | ' + n.aktualnieNaStanie + '/' + n.stanPoczatkowy
+            + '</div>'
+            + '<div style="margin-top:4px;display:flex;gap:15px;">'
+            + '<span onclick="openDamageModal(\'' + esc(n.nazwaSys) + '\',\'' + esc(n.sn) + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">Zgłoś uszkodzenie</span>'
+            + '<span onclick="przesunDoZuzywalnych(\'' + esc(n.id) + '\',\'' + esc(n.nazwaWys) + '\')" style="color:#f59e0b;cursor:pointer;font-size:12px;">Przesuń do zużywalnych</span>'
+            + '</div>';
+        }
+
+        h += '</div>';
       }
       container.innerHTML = h;
     }
@@ -1662,9 +1760,9 @@
       var snSection = document.getElementById('newKatSNSection');
       var stanInput = document.getElementById('newKatStan');
 
-      snSection.style.display = (kat === 'elektronarzedzia' || kat === 'specjalne') ? 'block' : 'none';
+      snSection.style.display = (kat === 'E') ? 'block' : 'none';
 
-      if (kat === 'elektronarzedzia' || kat === 'specjalne') {
+      if (kat === 'E') {
         stanInput.value = '1';
         stanInput.setAttribute('readonly', true);
       } else {
@@ -1682,7 +1780,7 @@
       if (!nazwaSys) { toast("Podaj nazwę systemową", "error"); return; }
       if (!nazwaWys) { toast("Podaj nazwę wyświetlaną", "error"); return; }
       if (!kategoria) { toast("Wybierz kategorię", "error"); return; }
-      if ((kategoria === 'elektronarzedzia' || kategoria === 'specjalne') && !sn) {
+      if (kategoria === 'E' && !sn) {
         toast("SN wymagany dla tej kategorii", "error"); return;
       }
 
@@ -1895,8 +1993,8 @@
       var html = '<div class="dynamic-fields">';
       html += '<div style="font-weight:bold;font-size:16px;margin-bottom:10px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</div>';
 
-      if (kat === 'elektronarzedzia' || kat === 'specjalne') {
-        // SN dropdown
+      if (kat === 'E') {
+        // Ewidencjonowane — SN dropdown, qty=1
         var availableItems = group.items.filter(function (it) { return it.aktualnieNaStanie > 0 && it.sn; });
         html += '<label>Wybierz egzemplarz (SN):</label>';
         html += '<select id="wypSNSelect">';
@@ -1904,14 +2002,14 @@
           html += '<option value="">Brak dostępnych</option>';
         } else {
           for (var j = 0; j < availableItems.length; j++) {
-            html += '<option value="' + esc(availableItems[j].sn) + '">' + esc(availableItems[j].nazwaSys) + ' (SN: ' + esc(availableItems[j].sn) + ')</option>';
+            html += '<option value="' + esc(availableItems[j].sn) + '">' + esc(simplifyName(availableItems[j].nazwaSys) || availableItems[j].nazwaSys) + ' (SN: ' + esc(availableItems[j].sn) + ')</option>';
           }
         }
         html += '</select>';
         html += '<label>Ilość:</label>';
         html += '<input type="number" id="wypQtyInput" value="1" min="1" max="1" readonly>';
       } else {
-        // stale / zuzywalne — no SN, quantity input
+        // N / Z — no SN, quantity input
         var maxAvailable = group.totalStock;
         for (var c = 0; c < wypCartItems.length; c++) {
           if (wypCartItems[c].nazwaWys === nazwaWys) maxAvailable -= wypCartItems[c].qty;
@@ -1920,11 +2018,10 @@
         html += '<input type="number" id="wypQtyInput" value="1" min="1" max="' + maxAvailable + '">';
       }
 
-      if (kat === 'specjalne') {
-        html += '<label>Zdjęcie przy wydaniu (WYMAGANE):</label>';
-        html += '<input type="file" id="wypPhotoInput" accept="image/*" capture="environment" onchange="previewPhoto(this,\'wypPhotoPreview\')">';
-        html += '<div class="photo-preview" id="wypPhotoPreview"></div>';
-      }
+      // Opcjonalne zdjęcie (dla dowolnej kategorii)
+      html += '<label>Zdjęcie (opcjonalne):</label>';
+      html += '<input type="file" id="wypPhotoInput" accept="image/*" capture="environment" onchange="previewPhoto(this,\'wypPhotoPreview\')">';
+      html += '<div class="photo-preview" id="wypPhotoPreview"></div>';
 
       html += '<button class="btn btn-primary" onclick="wypAddToCartFromFields()" style="height:50px;font-size:15px;margin-top:15px;">Dodaj do koszyka</button>';
       html += '</div>';
@@ -1941,7 +2038,7 @@
       var qty = 1;
       var photoBase64 = null;
 
-      if (kat === 'elektronarzedzia' || kat === 'specjalne') {
+      if (kat === 'E') {
         var snSelect = document.getElementById('wypSNSelect');
         sn = snSelect ? snSelect.value : '';
         if (!sn) { toast('Wybierz egzemplarz (SN)', 'error'); return; }
@@ -1951,13 +2048,9 @@
         if (qty < 1) { toast('Podaj ilość', 'error'); return; }
       }
 
-      if (kat === 'specjalne') {
-        var photoInput = document.getElementById('wypPhotoInput');
-        if (!photoInput || !photoInput.files || !photoInput.files[0]) {
-          toast('Zdjęcie wymagane dla kategorii Specjalne', 'error');
-          return;
-        }
-        // Compress and add to cart
+      // Optional photo for any category
+      var photoInput = document.getElementById('wypPhotoInput');
+      if (photoInput && photoInput.files && photoInput.files[0]) {
         compressImage(photoInput.files[0], 1024, 0.6, function (base64) {
           finishAddToCart(nazwaWys, sn, qty, kat, base64);
         });
@@ -2054,7 +2147,7 @@
       var h = '';
       for (var i = 0; i < wypCartItems.length; i++) {
         var c = wypCartItems[i];
-        var canChangeQty = (c.kategoria !== 'elektronarzedzia' && c.kategoria !== 'specjalne');
+        var canChangeQty = (c.kategoria !== 'E');
         h += '<div class="cart-item">'
           + '<div style="flex:1;">'
           + '<b>' + esc(c.nazwaWys) + '</b>'
@@ -2088,16 +2181,12 @@
       // Validation
       for (var i = 0; i < wypCartItems.length; i++) {
         var item = wypCartItems[i];
-        if (item.kategoria !== 'zuzywalne' && !wypOsobaId) {
+        if (item.kategoria !== 'Z' && !wypOsobaId) {
           toast("Osoba wymagana dla: " + item.nazwaWys + " (nie-zużywalne)", "error");
           return;
         }
-        if ((item.kategoria === 'elektronarzedzia' || item.kategoria === 'specjalne') && !item.sn) {
+        if (item.kategoria === 'E' && !item.sn) {
           toast("SN wymagany dla: " + item.nazwaWys, "error");
-          return;
-        }
-        if (item.kategoria === 'specjalne' && !item.photoBase64) {
-          toast("Zdjęcie wymagane dla: " + item.nazwaWys, "error");
           return;
         }
       }
@@ -2239,7 +2328,27 @@
           hideLoading();
           toast('Błąd: ' + err.message, 'error');
         })
-        .changeKategoria(idKatalog, 'zuzywalne');
+        .changeKategoria(idKatalog, 'Z');
+    }
+
+    function szybkieWydaj(nazwaWys, kategoria) {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast('Wydano 1x ' + nazwaWys, 'success');
+            loadKatalog();
+            loadLog();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .wydajBatch('', [{ nazwaWys: nazwaWys, sn: '', qty: 1, kategoria: kategoria, photoBase64: null }]);
     }
 
     /* =========================
@@ -2333,7 +2442,7 @@
       for (var i = 0; i < data.length; i++) {
         var r = data[i];
         html += '<tr>';
-        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.nazwaSys) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(simplifyName(r.nazwaSys) || r.nazwaSys) + '</td>';
         html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.sn) + '</td>';
         html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.opisUszkodzenia) + '</td>';
         html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.data) + '</td>';

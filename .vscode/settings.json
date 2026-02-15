@@ -11,6 +11,7 @@
         "commands": [
             {
                 "match": "\\.(gs|html|json)$",
+                "runIn": "terminal",
                 "cmd": "cd ${workspaceFolder} && git add . && git commit -m \"💾 Auto-save: ${fileBasename}\" --allow-empty && clasp push && clasp deploy -i AKfycbxYeHyAlS1YbjVZBL2sqcLbf3KfrTgrZQnCpLFhr7lG7gNumh0MGs6wEeXofOIgUim0"
             }
         ]

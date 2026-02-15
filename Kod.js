@@ -192,7 +192,7 @@ function getKatalog() {
   var katalog = data.map(function (r) {
     var sn = extractSN(r[COLS_KATALOG.SN]);
     var kategoria = String(r[COLS_KATALOG.KATEGORIA] || '');
-    if (sn && kategoria !== 'specjalne') kategoria = 'elektronarzedzia';
+    if (sn) kategoria = 'E';
     return {
       id: String(r[COLS_KATALOG.ID]),
       nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''),
@@ -437,11 +437,11 @@ function wydajBatch(idOsoby, items) {
       katData[resolved.row][COLS_KATALOG.AKTUALNIE_NA_STANIE] = newStock;
 
       // Determine status
-      var status = (item.kategoria === 'zuzywalne') ? 'Zuzyte' : 'Wydane';
+      var status = (item.kategoria === 'Z') ? 'Zuzyte' : 'Wydane';
 
-      // Handle photo for specjalne
+      // Handle photo (optional for any category)
       var photoUrl = '';
-      if (item.kategoria === 'specjalne' && item.photoBase64) {
+      if (item.photoBase64) {
         var opId = generateId('OP');
         photoUrl = savePhotoToDrive(item.photoBase64, 'Wydania', opId);
       }
@@ -501,10 +501,8 @@ function zwrocOperacje(idOperacji, photoBase64) {
         return { success: false, error: 'Nie można zwrócić — status: ' + status };
       }
 
-      var kategoria = String(przesData[i][COLS_PRZES.KATEGORIA]);
-
-      // Handle photo for specjalne
-      if (kategoria === 'specjalne' && photoBase64) {
+      // Handle photo (optional)
+      if (photoBase64) {
         var photoUrl = savePhotoToDrive(photoBase64, 'Zwroty', idOperacji);
         przesSheet.getRange(i + 1, COLS_PRZES.ZDJECIE_ZWROT_URL + 1).setValue(photoUrl);
       }
@@ -548,10 +546,8 @@ function zwrocBatch(ids, photoDataMap) {
         if (String(przesData[i][COLS_PRZES.ID_OPERACJI]) !== idOp) continue;
         if (String(przesData[i][COLS_PRZES.STATUS]) !== 'Wydane') continue;
 
-        var kategoria = String(przesData[i][COLS_PRZES.KATEGORIA]);
-
-        // Handle photo for specjalne
-        if (kategoria === 'specjalne' && photoMap[idOp]) {
+        // Handle photo (optional)
+        if (photoMap[idOp]) {
           var photoUrl = savePhotoToDrive(photoMap[idOp], 'Zwroty', idOp);
           przesSheet.getRange(i + 1, COLS_PRZES.ZDJECIE_ZWROT_URL + 1).setValue(photoUrl);
         }
@@ -855,13 +851,12 @@ function migrateNarzedzia() {
     var sn = extractSN(opis);
     if (sn === opis) sn = '';
 
-    // Normalizuj kategorię
-    if (kategoria === 'zużywalne' || kategoria === 'zuzywalne') kategoria = 'zuzywalne';
-    else if (kategoria === 'stałe' || kategoria === 'stale') kategoria = 'stale';
-    else if (kategoria === 'elektronarzędzia' || kategoria === 'elektronarzedzia') kategoria = 'elektronarzedzia';
-    else if (kategoria === 'specjalne') kategoria = 'specjalne';
-    else if (sn) kategoria = 'elektronarzedzia';
-    else kategoria = 'stale';
+    // Normalizuj kategorię do E/N/Z
+    if (kategoria === 'zużywalne' || kategoria === 'zuzywalne' || kategoria === 'z') kategoria = 'Z';
+    else if (kategoria === 'elektronarzędzia' || kategoria === 'elektronarzedzia' || kategoria === 'specjalne' || kategoria === 'e') kategoria = 'E';
+    else if (kategoria === 'stałe' || kategoria === 'stale' || kategoria === 'n') kategoria = 'N';
+    else if (sn) kategoria = 'E';
+    else kategoria = 'N';
 
     var id = generateId('K');
 
@@ -879,4 +874,49 @@ function migrateNarzedzia() {
 
   CacheService.getScriptCache().remove("katalog");
   return { success: true, migrated: count };
+}
+
+// ============================================
+// MIGRACJA KATEGORII (jednorazowa)
+// Podmienia stare nazwy kategorii na E/N/Z
+// ============================================
+function migrateKategorie() {
+  var map = {
+    'elektronarzedzia': 'E', 'elektronarzędzia': 'E', 'specjalne': 'E',
+    'stale': 'N', 'stałe': 'N',
+    'zuzywalne': 'Z', 'zużywalne': 'Z'
+  };
+
+  var changed = 0;
+
+  // Katalog — kolumna D (index 3)
+  var kat = getSheet(SHEET_KATALOG);
+  var katLast = kat.getLastRow();
+  if (katLast >= 2) {
+    var katData = kat.getRange(2, COLS_KATALOG.KATEGORIA + 1, katLast - 1, 1).getValues();
+    for (var i = 0; i < katData.length; i++) {
+      var v = String(katData[i][0] || '').trim().toLowerCase();
+      if (map[v]) {
+        kat.getRange(i + 2, COLS_KATALOG.KATEGORIA + 1).setValue(map[v]);
+        changed++;
+      }
+    }
+  }
+
+  // Przesunięcia — kolumna G (index 6)
+  var prz = getSheet(SHEET_PRZESUNIECIA);
+  var przLast = prz.getLastRow();
+  if (przLast >= 2) {
+    var przData = prz.getRange(2, COLS_PRZES.KATEGORIA + 1, przLast - 1, 1).getValues();
+    for (var j = 0; j < przData.length; j++) {
+      var w = String(przData[j][0] || '').trim().toLowerCase();
+      if (map[w]) {
+        prz.getRange(j + 2, COLS_PRZES.KATEGORIA + 1).setValue(map[w]);
+        changed++;
+      }
+    }
+  }
+
+  CacheService.getScriptCache().remove("katalog");
+  return { success: true, changed: changed };
 }
