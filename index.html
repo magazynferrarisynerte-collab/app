@@ -980,21 +980,22 @@
       <label class="form-label">Stan początkowy (ilość)</label>
       <input type="number" class="form-input" id="newKatStan" value="1" min="1">
       <button class="btn btn-primary" onclick="addKatalogItem()">Dodaj do katalogu</button>
+      <div id="lastAddedItem" style="display:none;margin-top:15px;background:#eef2f7;padding:12px 15px;border-radius:12px;"></div>
     </div>
   </div>
 
   <!-- MODAL: WYPOŻYCZENIE -->
   <div class="modal" id="modalWypozycz">
     <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">Nowe wydanie</div>
-        <button class="close-btn" onclick="closeModal('modalWypozycz')">&times;</button>
-      </div>
+      <div class="modal-header" style="display:none;"></div>
 
       <!-- KROK 1: Wybór osoby -->
       <div id="wypStep1">
-        <input type="text" class="picker-search" id="wypOsobaSearch" placeholder="Kto pożycza? Szukaj osoby..."
-          oninput="filterWypOsoby()">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input type="text" class="picker-search" id="wypOsobaSearch" placeholder="Kto pożycza? Szukaj osoby..."
+            oninput="filterWypOsoby()" style="flex:1;margin-bottom:0;">
+          <button class="close-btn" onclick="closeModal('modalWypozycz')" style="position:static;font-size:28px;">&times;</button>
+        </div>
         <button class="btn" onclick="wypSkipOsoba()"
           style="height:50px;font-size:15px;background:#f59e0b;color:white;box-shadow:0 4px 0 #d97706;margin-bottom:15px;">
           Wydaj bez osoby (zużywalne)
@@ -1010,8 +1011,11 @@
           <button onclick="wypChangeOsoba()"
             style="color: #667eea; border:none; background:none; font-weight:bold; font-size:14px; cursor:pointer;">Zmień</button>
         </div>
-        <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
-          oninput="filterWypNarz()" style="height:50px;font-size:18px;margin-bottom:8px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
+            oninput="filterWypNarz()" style="flex:1;height:50px;font-size:18px;margin-bottom:0;">
+          <button class="close-btn" onclick="closeModal('modalWypozycz')" style="position:static;font-size:28px;">&times;</button>
+        </div>
         <div id="wypCollapsedBar" onclick="wypExpandUI()">Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
         </div>
 
@@ -1021,11 +1025,10 @@
         <div id="wypNarzList"></div>
 
         <div id="wypCartSection">
-          <div style="font-weight: bold; margin: 10px 0 6px; font-size: 16px;">KOSZYK:</div>
           <div id="wypCart"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
             <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit(false)"
-              style="flex:1;height:60px;font-size:17px;" disabled>Wydaj</button>
+              style="flex:1;height:60px;font-size:17px;" disabled>Nowe wydanie</button>
             <button class="btn" id="wypWhatsBtn" onclick="wypSubmit(true)"
               style="flex:1;height:60px;font-size:17px;background:#25d366;color:white;box-shadow:0 5px 0 #1da851;display:none;"
               disabled>WhatsApp</button>
@@ -1353,7 +1356,7 @@
       });
     }
 
-    var BRANDS = ['STANLEY','MAKITA','BOSCH','YATO','DEWALT','MILWAUKEE','HILTI','METABO','FESTOOL','STIHL','HUSQVARNA','KARCHER','RYOBI','EINHELL','PARKSIDE','GRAPHITE','DEDRA','TOPEX','VOREL','STHOR','NEO','PROLINE','HOGERT','BAHCO','KNIPEX','WIHA','WERA','IRWIN','TAJIMA','STABILA','WURTH','FISCHER','RAWLPLUG','WOLFCRAFT'];
+    var BRANDS = ['STANLEY','MAKITA','BOSCH','YATO','DEWALT','MILWAUKEE','HILTI','METABO','FESTOOL','STIHL','HUSQVARNA','KARCHER','RYOBI','EINHELL','PARKSIDE','GRAPHITE','DEDRA','TOPEX','VOREL','STHOR','NEO','PROLINE','HOGERT','BAHCO','KNIPEX','WIHA','WERA','IRWIN','TAJIMA','STABILA','WURTH','FISCHER','RAWLPLUG','WOLFCRAFT','HIKOKI','HITACHI','KRESS','FLEX','FEIN','AEG','RIDGID','RUBI','BERNER','ERBAUER','TITAN','TOTAL','INGCO','TOYA','EXTOL','KLINGSPOR'];
     var COLORS_PL = ['ZOLTA','ŻÓŁTA','ZÓŁTA','CZARNA','CZERWONA','ZIELONA','NIEBIESKA','BIALA','BIAŁA','SZARA','POMARANCZOWA','FIOLETOWA','BRAZOWA','BRĄZOWA','SREBRNA','ZLOTA','ZŁOTA'];
 
     function simplifyName(fullName) {
@@ -1372,6 +1375,11 @@
         if (COLORS_PL.indexOf(wUp) !== -1) continue;
         if (/^\d+[Xx]\d+/.test(w)) continue;
         if (/^\d{3,}[Mm]{1,2}$/.test(w)) continue;
+        // Modele alfanumeryczne (DS18DE, DHP453, GBH2-26, WR18DBDL2)
+        if (/^[A-Z]{1,4}\d{2,}[A-Z]*\d*$/i.test(w)) continue;
+        if (/^[A-Z]{2,}\d+-\w+$/i.test(w)) continue;
+        // Samotne kreski/myślniki
+        if (/^[-–—]+$/.test(w)) continue;
         result.push(w);
       }
       return result.join(' ').trim();
@@ -1827,6 +1835,8 @@
       document.getElementById('newKatStan').value = '1';
       document.getElementById('newKatSNSection').style.display = 'none';
       document.getElementById('newKatStan').removeAttribute('readonly');
+      lastAdded = null;
+      document.getElementById('lastAddedItem').style.display = 'none';
       openModal('modalAddKatalog');
     }
 
@@ -1845,6 +1855,8 @@
       }
     }
 
+    var lastAdded = null;
+
     function addKatalogItem() {
       var nazwaSys = document.getElementById('newKatNazwaSys').value.trim();
       var nazwaWys = document.getElementById('newKatNazwaWys').value.trim();
@@ -1859,23 +1871,69 @@
         toast("SN wymagany dla tej kategorii", "error"); return;
       }
 
-      showLoading();
+      toast("Dodaję...", "info");
       google.script.run
         .withSuccessHandler(function (res) {
-          hideLoading();
           if (res && res.success) {
-            toast("Dodano do katalogu!", "success");
-            closeModal('modalAddKatalog');
-            loadKatalog();
+            toast("Dodano: " + nazwaWys, "success");
+            lastAdded = { nazwaWys: nazwaWys, kategoria: kategoria, stan: stan };
+            renderLastAdded();
+            // Wyczyść formularz do kolejnego wpisu
+            document.getElementById('newKatNazwaSys').value = '';
+            document.getElementById('newKatNazwaWys').value = '';
+            document.getElementById('newKatSN').value = '';
+            document.getElementById('newKatStan').value = '1';
+            loadKatalogBackground();
           } else {
             toast("Błąd: " + (res.error || 'Nieznany'), "error");
           }
         })
         .withFailureHandler(function (err) {
-          hideLoading();
           toast("Błąd: " + err.message, "error");
         })
         .addKatalogItem(nazwaSys, nazwaWys, kategoria, sn, stan);
+    }
+
+    function renderLastAdded() {
+      var el = document.getElementById('lastAddedItem');
+      if (!lastAdded) { el.style.display = 'none'; return; }
+      var la = lastAdded;
+      var h = '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<div><b>' + esc(la.nazwaWys) + '</b> ' + getKategoriaBadge(la.kategoria)
+        + '<br><span style="font-size:12px;color:#636e72;">Stan: ' + la.stan + '</span></div>';
+
+      if (la.kategoria === 'N' || la.kategoria === 'Z') {
+        h += '<div style="display:flex;align-items:center;gap:6px;">'
+          + '<input type="number" id="lastAddedQty" value="1" min="1" style="width:60px;height:40px;text-align:center;border:1px solid #ddd;border-radius:8px;font-size:16px;">'
+          + '<button onclick="zwiekszOstatnia()" style="background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:bold;cursor:pointer;">+ Dodaj ilość</button>'
+          + '</div>';
+      }
+
+      h += '</div>';
+      el.innerHTML = h;
+      el.style.display = 'block';
+    }
+
+    function zwiekszOstatnia() {
+      if (!lastAdded) return;
+      var qty = parseInt(document.getElementById('lastAddedQty').value) || 1;
+      if (qty < 1) return;
+
+      lastAdded.stan += qty;
+      renderLastAdded();
+      toast('Dodano +' + qty + ' do ' + lastAdded.nazwaWys, 'success');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.success) {
+            toast('Błąd zapisu: ' + (res.error || ''), 'error');
+          }
+          loadKatalogBackground();
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .zwiekszStan(lastAdded.nazwaWys, qty);
     }
 
     /* =========================
@@ -2095,19 +2153,31 @@
       var kat = group.kategoria;
 
       if (kat === 'E') {
-        // Ewidencjonowane — potrzeba wyboru SN
-        var panel = document.getElementById('wypDynamicFields');
         var availableItems = group.items.filter(function (it) { return it.aktualnieNaStanie > 0 && it.sn; });
+
+        // Jeden dostępny egzemplarz — od razu do koszyka
+        if (availableItems.length === 1) {
+          document.getElementById('wypDynamicFields').style.display = 'none';
+          finishAddToCart(nazwaWys, availableItems[0].sn, 1, 'E', null);
+          return;
+        }
+
+        // Wiele egzemplarzy — pokaż wybór SN
+        if (availableItems.length === 0) {
+          toast('Brak dostępnych egzemplarzy', 'error');
+          return;
+        }
+
+        var panel = document.getElementById('wypDynamicFields');
         var html = '<div class="dynamic-fields">';
-        html += '<div style="font-weight:bold;font-size:16px;margin-bottom:10px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+        html += '<span style="font-weight:bold;font-size:16px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</span>';
+        html += '<span onclick="document.getElementById(\'wypDynamicFields\').style.display=\'none\'" style="cursor:pointer;font-size:22px;color:#636e72;padding:0 4px;">&times;</span>';
+        html += '</div>';
         html += '<label>Wybierz egzemplarz (SN):</label>';
         html += '<select id="wypSNSelect">';
-        if (availableItems.length === 0) {
-          html += '<option value="">Brak dostępnych</option>';
-        } else {
-          for (var j = 0; j < availableItems.length; j++) {
-            html += '<option value="' + esc(availableItems[j].sn) + '">' + esc(simplifyName(availableItems[j].nazwaSys) || availableItems[j].nazwaSys) + ' (SN: ' + esc(availableItems[j].sn) + ')</option>';
-          }
+        for (var j = 0; j < availableItems.length; j++) {
+          html += '<option value="' + esc(availableItems[j].sn) + '">' + esc(simplifyName(availableItems[j].nazwaSys) || availableItems[j].nazwaSys) + ' (SN: ' + esc(availableItems[j].sn) + ')</option>';
         }
         html += '</select>';
         html += '<button class="btn btn-primary" onclick="wypAddSNToCart()" style="height:50px;font-size:15px;margin-top:15px;">Dodaj do koszyka</button>';

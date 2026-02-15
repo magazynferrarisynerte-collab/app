@@ -80,7 +80,9 @@ function simplifyToolName(fullName) {
     'METABO', 'FESTOOL', 'STIHL', 'HUSQVARNA', 'KARCHER', 'RYOBI', 'EINHELL',
     'PARKSIDE', 'GRAPHITE', 'DEDRA', 'TOPEX', 'VOREL', 'STHOR', 'NEO',
     'PROLINE', 'HOGERT', 'BAHCO', 'KNIPEX', 'WIHA', 'WERA', 'IRWIN',
-    'TAJIMA', 'STABILA', 'WURTH', 'FISCHER', 'RAWLPLUG', 'WOLFCRAFT'
+    'TAJIMA', 'STABILA', 'WURTH', 'FISCHER', 'RAWLPLUG', 'WOLFCRAFT',
+    'HIKOKI', 'HITACHI', 'KRESS', 'FLEX', 'FEIN', 'AEG', 'RIDGID', 'RUBI',
+    'BERNER', 'ERBAUER', 'TITAN', 'TOTAL', 'INGCO', 'TOYA', 'EXTOL', 'KLINGSPOR'
   ];
 
   var colors = [
@@ -111,6 +113,13 @@ function simplifyToolName(fullName) {
 
     // Zachowaj proste miary (8M, 5M, 10MM, 2.5M) ale pomiń długie kody (300MM+)
     if (/^\d{3,}[Mm]{1,2}$/.test(w)) continue;
+
+    // Modele alfanumeryczne (DS18DE, DHP453, GBH2-26, WR18DBDL2)
+    if (/^[A-Z]{1,4}\d{2,}[A-Z]*\d*$/i.test(w)) continue;
+    if (/^[A-Z]{2,}\d+-\w+$/i.test(w)) continue;
+
+    // Samotne kreski/myślniki
+    if (/^[-–—]+$/.test(w)) continue;
 
     result.push(w);
   }
@@ -657,6 +666,31 @@ function uzupelnijStan(nazwaWys, qty) {
 
     CacheService.getScriptCache().remove("katalog");
     return { success: true, updated: updated };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
+}
+
+function zwiekszStan(nazwaWys, qty) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_KATALOG);
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][COLS_KATALOG.NAZWA_WYSWIETLANA]) === nazwaWys) {
+        var pocz = Number(data[i][COLS_KATALOG.STAN_POCZATKOWY]) || 0;
+        var stan = Number(data[i][COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0;
+        sheet.getRange(i + 1, COLS_KATALOG.STAN_POCZATKOWY + 1).setValue(pocz + qty);
+        sheet.getRange(i + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(stan + qty);
+        CacheService.getScriptCache().remove("katalog");
+        return { success: true, newStan: pocz + qty };
+      }
+    }
+    return { success: false, error: 'Nie znaleziono pozycji' };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
