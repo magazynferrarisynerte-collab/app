@@ -81,7 +81,6 @@
     }
 
     #wypCart {
-      max-height: 220px;
       overflow-y: auto;
     }
 
@@ -96,6 +95,21 @@
       display: flex;
       flex-direction: column;
       height: calc(100dvh - 120px);
+    }
+
+    #wypStep2 #wypLastAdded {
+      flex-shrink: 0;
+    }
+
+    #wypStep2 #wypBottomBar {
+      flex-shrink: 0;
+      padding: 6px 0 0 0;
+    }
+
+    #wypStep2 #wypCartSection {
+      flex-shrink: 0;
+      max-height: 40vh;
+      overflow-y: auto;
     }
 
     #wypStep2 #wypNarzList {
@@ -154,7 +168,8 @@
     }
 
     #wypStep2.narz-collapsed #wypPersonBar,
-    #wypStep2.narz-collapsed #wypCartSection {
+    #wypStep2.narz-collapsed #wypCartSection,
+    #wypStep2.narz-collapsed #wypBottomBar {
       display: none !important;
     }
 
@@ -1036,15 +1051,17 @@
         <div id="wypDynamicFields" style="display:none;"></div>
 
         <div id="wypNarzList" ontouchstart="document.getElementById('wypNarzSearch').blur()"></div>
-        <div id="wypLastAdded" style="display:none;"></div>
 
         <div id="wypCartSection">
           <div id="wypCart"></div>
-          <div style="display:flex;gap:8px;margin-top:8px;">
+        </div>
+        <div id="wypLastAdded" style="display:none;"></div>
+        <div id="wypBottomBar" style="display:none;">
+          <div style="display:flex;gap:6px;">
             <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit(false)"
-              style="flex:1;height:60px;font-size:17px;" disabled>Nowe wydanie</button>
+              style="flex:1;height:48px;font-size:15px;margin:0;" disabled>Nowe wydanie</button>
             <button class="btn" id="wypWhatsBtn" onclick="wypSubmit(true)"
-              style="flex:1;height:60px;font-size:17px;background:#25d366;color:white;box-shadow:0 5px 0 #1da851;display:none;"
+              style="flex:1;height:48px;font-size:15px;background:#25d366;color:white;box-shadow:0 3px 0 #1da851;display:none;margin:0;"
               disabled>WhatsApp</button>
           </div>
         </div>
@@ -2126,6 +2143,7 @@
           if (!step2.classList.contains('narz-collapsed')) {
             step2.classList.add('narz-collapsed');
             document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+            renderWypLastAdded();
           }
         }
       };
@@ -2133,6 +2151,7 @@
 
     function wypExpandUI() {
       document.getElementById('wypStep2').classList.remove('narz-collapsed');
+      document.getElementById('wypLastAdded').style.display = 'none';
     }
 
     function wypChangeOsoba() {
@@ -2313,22 +2332,25 @@
     function renderWypLastAdded() {
       var laEl = document.getElementById('wypLastAdded');
       if (!wypCartItems.length) { laEl.style.display = 'none'; return; }
+      // Tylko w trybie przeglądania (collapsed) — w koszyku nie pokazuj
+      var step2 = document.getElementById('wypStep2');
+      if (!step2.classList.contains('narz-collapsed')) { laEl.style.display = 'none'; return; }
       var idx = wypCartItems.length - 1;
       var c = wypCartItems[idx];
       var laName = simplifyName(c.nazwaWys) || c.nazwaWys;
       var canQty = (c.kategoria !== 'E');
-      var h = '<div style="background:#eef2f7;padding:8px 12px;border-radius:12px;margin-top:8px;">'
+      var h = '<div style="background:#eef2f7;padding:6px 10px;border-radius:10px;margin-top:4px;">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;">'
-        + '<span style="font-size:14px;"><b>' + esc(laName) + '</b>'
-        + (c.sn ? ' <span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(c.sn) + '</span>' : '')
+        + '<span style="font-size:13px;"><b>' + esc(laName) + '</b>'
+        + (c.sn ? ' <span style="color:#8b5cf6;font-size:11px;">SN: ' + esc(c.sn) + '</span>' : '')
         + ' ' + getKategoriaBadge(c.kategoria) + '</span>'
-        + '<span onclick="wypLastRemove()" style="color:#ef4444;cursor:pointer;font-size:13px;font-weight:bold;">Usuń</span>'
+        + '<span onclick="wypLastRemove()" style="color:#ef4444;cursor:pointer;font-size:12px;font-weight:bold;">Usuń</span>'
         + '</div>';
       if (canQty) {
-        h += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'
-          + '<button class="qty-btn" onclick="wypLastQty(-1)">−</button>'
-          + '<span style="font-size:15px;font-weight:bold;min-width:24px;text-align:center;">' + c.qty + '</span>'
-          + '<button class="qty-btn" onclick="wypLastQty(1)">+</button>'
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">'
+          + '<button class="qty-btn" onclick="wypLastQty(-1)" style="width:28px;height:28px;font-size:16px;">−</button>'
+          + '<span style="font-size:14px;font-weight:bold;min-width:20px;text-align:center;">' + c.qty + '</span>'
+          + '<button class="qty-btn" onclick="wypLastQty(1)" style="width:28px;height:28px;font-size:16px;">+</button>'
           + '</div>';
       }
       h += '</div>';
@@ -2392,58 +2414,61 @@
       var container = document.getElementById('wypCart');
       var btn = document.getElementById('wypSubmitBtn');
       var whatsBtn = document.getElementById('wypWhatsBtn');
+      var bottomBar = document.getElementById('wypBottomBar');
       var collapsedCount = document.getElementById('wypCollapsedCount');
       if (collapsedCount) collapsedCount.textContent = wypCartItems.length;
 
       if (!wypCartItems.length) {
-        container.innerHTML = '<div class="empty-msg" style="padding:10px;">Koszyk pusty — kliknij narzędzie powyżej</div>';
+        container.innerHTML = '';
         btn.disabled = true;
         if (whatsBtn) whatsBtn.disabled = true;
+        bottomBar.style.display = 'none';
         return;
       }
 
       btn.disabled = false;
       if (whatsBtn && whatsBtn.style.display !== 'none') whatsBtn.disabled = false;
+      bottomBar.style.display = 'block';
       var h = '';
       for (var i = 0; i < wypCartItems.length; i++) {
         var c = wypCartItems[i];
         var canChangeQty = (c.kategoria !== 'E');
-        h += '<div class="cart-item" style="flex-wrap:wrap;">'
-          + '<div style="flex:1;min-width:0;">'
+        h += '<div class="cart-item" style="flex-wrap:wrap;padding:6px 8px;margin-bottom:2px;">'
+          + '<div style="flex:1;min-width:0;font-size:13px;">'
           + '<b>' + esc(c.nazwaWys) + '</b>'
-          + (c.sn ? ' <span style="font-size:12px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
+          + (c.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
           + ' ' + getKategoriaBadge(c.kategoria)
           + '</div>';
 
         if (canChangeQty) {
           h += '<div class="qty-controls">'
-            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',-1)">−</button>'
-            + '<span class="qty-val">' + c.qty + '</span>'
-            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',1)">+</button>'
+            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',-1)" style="width:28px;height:28px;font-size:16px;">−</button>'
+            + '<span class="qty-val" style="font-size:14px;min-width:20px;">' + c.qty + '</span>'
+            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',1)" style="width:28px;height:28px;font-size:16px;">+</button>'
             + '</div>';
         } else {
-          h += '<span class="qty-val">1</span>';
+          h += '<span class="qty-val" style="font-size:14px;">1</span>';
         }
-
-        h += '<button class="remove-cart-btn" onclick="wypRemoveFromCart(' + i + ')" style="margin-left:10px;">✕</button>';
 
         // Opcja zdjęcia (wymagane dla oflagowanych)
-        h += '<div style="width:100%;margin-top:6px;display:flex;align-items:center;gap:8px;">';
         if (c.photoBase64) {
-          h += '<span style="font-size:11px;color:#10b981;">Zdjęcie OK</span>'
-            + '<span onclick="wypCartRemovePhoto(' + i + ')" style="font-size:11px;color:#ef4444;cursor:pointer;">Usuń</span>';
+          h += '<div style="width:100%;margin-top:4px;display:flex;align-items:center;gap:8px;">'
+            + '<span style="font-size:11px;color:#10b981;">Zdjęcie OK</span>'
+            + '<span onclick="wypCartRemovePhoto(' + i + ')" style="font-size:11px;color:#ef4444;cursor:pointer;">Usuń</span>'
+            + '</div>';
         } else if (c.flaga) {
-          h += '<label style="font-size:12px;color:#ef4444;cursor:pointer;margin:0;font-weight:bold;">'
+          h += '<div style="width:100%;margin-top:4px;">'
+            + '<label style="font-size:11px;color:#ef4444;cursor:pointer;margin:0;font-weight:bold;">'
             + '<input type="file" accept="image/*" capture="environment" onchange="wypCartAddPhoto(' + i + ',this)" style="display:none;">'
             + '&#9873; Zdjęcie wymagane!'
-            + '</label>';
+            + '</label></div>';
         } else {
-          h += '<label style="font-size:12px;color:#667eea;cursor:pointer;margin:0;">'
+          h += '<div style="width:100%;margin-top:4px;">'
+            + '<label style="font-size:11px;color:#667eea;cursor:pointer;margin:0;">'
             + '<input type="file" accept="image/*" capture="environment" onchange="wypCartAddPhoto(' + i + ',this)" style="display:none;">'
             + 'Dodaj zdjęcie'
-            + '</label>';
+            + '</label></div>';
         }
-        h += '</div>';
 
         h += '</div>';
       }
