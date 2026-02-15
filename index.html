@@ -786,7 +786,7 @@
       <button class="filter-btn active" onclick="filterLogStatus('active',this)">Aktywne</button>
       <button class="filter-btn" onclick="filterLogStatus('returned',this)">Zwrócone</button>
     </div>
-    <div id="logList"></div>
+    <div id="logList" ontouchstart="document.getElementById('searchLog').blur()"></div>
     <button class="fab" onclick="openWypozyczModal()">+</button>
   </div>
 
@@ -795,7 +795,7 @@
     <input type="text" class="search-input" id="searchOsoby" placeholder="Szukaj osoby...">
     <button class="btn btn-primary" onclick="exportAllContacts()"
       style="width:100%;height:50px;font-size:14px;margin-bottom:15px;">Eksportuj wszystkie kontakty (.vcf)</button>
-    <div id="osobyList"></div>
+    <div id="osobyList" ontouchstart="document.getElementById('searchOsoby').blur()"></div>
     <button class="fab" onclick="openAddOsobaModal()">+</button>
   </div>
 
@@ -817,7 +817,7 @@
       <button class="filter-btn" onclick="filterNarzKategoria('N',this)">Nieewidencjonowane</button>
       <button class="filter-btn" onclick="filterNarzKategoria('Z',this)">Zużywalne</button>
     </div>
-    <div id="narzedziaList"></div>
+    <div id="narzedziaList" ontouchstart="document.getElementById('searchNarzedzia').blur()"></div>
     <button class="fab" onclick="openAddKatalogModal()">+</button>
   </div>
 
@@ -1022,7 +1022,8 @@
         <!-- Dynamic fields panel (appears when tool is clicked) -->
         <div id="wypDynamicFields" style="display:none;"></div>
 
-        <div id="wypNarzList"></div>
+        <div id="wypNarzList" ontouchstart="document.getElementById('wypNarzSearch').blur()"></div>
+        <div id="wypLastAdded" style="display:none;"></div>
 
         <div id="wypCartSection">
           <div id="wypCart"></div>
@@ -1159,7 +1160,7 @@
       });
       if (!active.length) { toast('Brak aktywnych wypożyczeń', 'error'); return; }
       var items = active.map(function (e) {
-        return '- ' + e.nazwaSys + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + ' (' + e.dataWydania + ')';
+        return '- ' + (simplifyName(e.nazwaSys) || e.nazwaSys) + (e.sn ? ' (SN: ' + e.sn + ')' : '') + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + ' (' + e.dataWydania + ')';
       });
       var msg = 'Aktualny stan wypożyczeń (' + currentDetailOsoba.imie + '):\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
       window.open(buildWhatsAppUrl(currentDetailOsoba.telefon, msg), '_blank');
@@ -1172,7 +1173,7 @@
         for (var j = 0; j < allLogEntries.length; j++) {
           if (allLogEntries[j].idOp === returnCartIds[i]) {
             var e = allLogEntries[j];
-            items.push('- ' + e.nazwaSys + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : ''));
+            items.push('- ' + (simplifyName(e.nazwaSys) || e.nazwaSys) + (e.sn ? ' (SN: ' + e.sn + ')' : '') + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : ''));
             break;
           }
         }
@@ -2015,6 +2016,7 @@
       document.getElementById('wypStep1').style.display = 'block';
       document.getElementById('wypStep2').style.display = 'none';
       document.getElementById('wypDynamicFields').style.display = 'none';
+      document.getElementById('wypLastAdded').style.display = 'none';
       renderWypOsobyList(allOsoby);
       openModal('modalWypozycz');
     }
@@ -2237,6 +2239,18 @@
       renderWypCart();
       renderWypNarzList(getFilteredGrouped());
       toast('Dodano do koszyka: ' + nazwaWys, 'success');
+
+      // Pokaż ostatnio dodaną pozycję pod listą narzędzi
+      var laEl = document.getElementById('wypLastAdded');
+      var laName = simplifyName(nazwaWys) || nazwaWys;
+      laEl.innerHTML = '<div style="background:#eef2f7;padding:10px 15px;border-radius:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;">'
+        + '<span style="font-size:14px;"><b>' + esc(laName) + '</b>'
+        + (sn ? ' <span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(sn) + '</span>' : '')
+        + (qty > 1 ? ' <span style="color:#636e72;font-size:12px;">x' + qty + '</span>' : '')
+        + ' ' + getKategoriaBadge(kategoria) + '</span>'
+        + '<span style="color:#10b981;font-size:12px;font-weight:bold;">Dodano</span>'
+        + '</div>';
+      laEl.style.display = 'block';
     }
 
     function filterWypNarz() {
