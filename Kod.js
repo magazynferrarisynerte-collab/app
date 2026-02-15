@@ -57,6 +57,14 @@ function generateId(prefix) {
   return prefix + Date.now() + Math.random().toString(36).substr(2, 5);
 }
 
+function extractSN(raw) {
+  if (!raw) return '';
+  var str = String(raw).trim();
+  var match = str.match(/(?:s\/n|sn)[.:;\s]*([^\s,]+)/i);
+  if (match) return match[1];
+  return str;
+}
+
 function formatDate(d) {
   if (!d) return '';
   try {
@@ -132,12 +140,15 @@ function getKatalog() {
   var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
 
   var katalog = data.map(function (r) {
+    var sn = extractSN(r[COLS_KATALOG.SN]);
+    var kategoria = String(r[COLS_KATALOG.KATEGORIA] || '');
+    if (sn && kategoria !== 'specjalne') kategoria = 'elektronarzedzia';
     return {
       id: String(r[COLS_KATALOG.ID]),
       nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''),
       nazwaWys: String(r[COLS_KATALOG.NAZWA_WYSWIETLANA] || ''),
-      kategoria: String(r[COLS_KATALOG.KATEGORIA] || ''),
-      sn: String(r[COLS_KATALOG.SN] || ''),
+      kategoria: kategoria,
+      sn: sn,
       stanPoczatkowy: Number(r[COLS_KATALOG.STAN_POCZATKOWY]) || 0,
       aktualnieNaStanie: Number(r[COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0
     };
@@ -243,7 +254,7 @@ function resolveAvailableItem(nazwaWys, preferredSN) {
       nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA]),
       nazwaWys: String(r[COLS_KATALOG.NAZWA_WYSWIETLANA]),
       kategoria: String(r[COLS_KATALOG.KATEGORIA]),
-      sn: String(r[COLS_KATALOG.SN] || ''),
+      sn: extractSN(r[COLS_KATALOG.SN]),
       aktualnieNaStanie: stock
     };
 
@@ -331,7 +342,7 @@ function wydajBatch(idOsoby, items) {
         if (stock < qty) continue;
 
         if (item.sn) {
-          if (String(r[COLS_KATALOG.SN]) === item.sn) {
+          if (extractSN(r[COLS_KATALOG.SN]) === item.sn) {
             resolved = { row: i, data: r, stock: stock };
             break;
           }

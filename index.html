@@ -692,22 +692,42 @@
         visibility: hidden;
       }
 
+      #modalRaport,
+      #modalRaport *,
       #modalRaportUszkodzonych,
       #modalRaportUszkodzonych * {
         visibility: visible;
       }
 
+      #modalRaport .modal-content,
       #modalRaportUszkodzonych .modal-content {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         background: white;
+        box-shadow: none;
       }
 
+      #modalRaport .close-btn,
+      #modalRaport .no-print,
       #modalRaportUszkodzonych .close-btn,
       #modalRaportUszkodzonych .no-print {
         display: none !important;
+      }
+
+      #modalRaport #raportPrintHeader,
+      #modalRaport #raportPrintFooter {
+        display: block !important;
+      }
+
+      #modalRaport table {
+        font-size: 11px;
+        page-break-inside: auto;
+      }
+
+      #modalRaport tr {
+        page-break-inside: avoid;
       }
     }
 
@@ -760,8 +780,7 @@
 
   <!-- TAB: LOG -->
   <div class="tab-content active" id="tabLog">
-    <input type="text" id="searchLog" class="search-input"
-      placeholder="Szukaj w logach (osoba, narzędzie, SN)">
+    <input type="text" id="searchLog" class="search-input" placeholder="Szukaj w logach (osoba, narzędzie, SN)">
     <div style="display:flex;gap:10px;margin-bottom:15px;">
       <button class="filter-btn" onclick="filterLogStatus('all',this)">Wszystkie</button>
       <button class="filter-btn active" onclick="filterLogStatus('active',this)">Aktywne</button>
@@ -801,6 +820,20 @@
     <button class="fab" onclick="openAddKatalogModal()">+</button>
   </div>
 
+  <!-- TAB: RAPORTY -->
+  <div class="tab-content" id="tabRaporty">
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <button class="btn btn-primary" onclick="showRaportWUzyciu()"
+        style="height:60px;font-size:16px;margin-bottom:0;">Aktualnie w użyciu</button>
+      <button class="btn btn-primary" onclick="showRaportNajczesciej()"
+        style="height:60px;font-size:16px;margin-bottom:0;background:#059669;">Najczęściej wydawane</button>
+      <button class="btn btn-primary" onclick="showRaportNajrzadziej()"
+        style="height:60px;font-size:16px;margin-bottom:0;background:#d97706;">Najrzadziej wydawane</button>
+      <button class="btn btn-primary" onclick="showRaportInwentaryzacja()"
+        style="height:60px;font-size:16px;margin-bottom:0;background:#7c3aed;">Inwentaryzacja — stan magazynu</button>
+    </div>
+  </div>
+
   <!-- MODAL: SZCZEGÓŁY OSOBY -->
   <div class="modal" id="modalOsobaDetail">
     <div class="modal-content">
@@ -809,8 +842,12 @@
         <button class="close-btn" onclick="closeModal('modalOsobaDetail')">&times;</button>
       </div>
       <div id="osobaDetailInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
-      <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
-        style="display:none;height:50px;font-size:16px;margin-bottom:15px;">WhatsApp — stan wypożyczeń</button>
+      <div style="display:flex;gap:10px;margin-bottom:15px;">
+        <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
+          style="display:none;height:50px;font-size:16px;flex:1;">WhatsApp — stan</button>
+        <button class="btn btn-primary" onclick="showRaportOsoby()"
+          style="height:50px;font-size:16px;flex:1;margin-bottom:0;">Drukuj / CSV</button>
+      </div>
       <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
       <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..."
         oninput="filterOsobaWyp()" style="height:50px;font-size:16px;margin-bottom:10px;">
@@ -855,6 +892,23 @@
     </div>
   </div>
 
+  <!-- MODAL: RAPORT UNIWERSALNY -->
+  <div class="modal" id="modalRaport">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="raportTitle">Raport</div>
+        <button class="close-btn" onclick="closeModal('modalRaport')">&times;</button>
+      </div>
+      <div class="no-print" style="display:flex;gap:10px;margin-bottom:15px;">
+        <button class="btn btn-primary" onclick="window.print()"
+          style="flex:1;height:50px;font-size:16px;margin-bottom:0;">Drukuj</button>
+        <button class="btn btn-primary" onclick="exportRaportCSV()"
+          style="flex:1;height:50px;font-size:16px;margin-bottom:0;background:#059669;">Eksport CSV</button>
+      </div>
+      <div id="raportContent"></div>
+    </div>
+  </div>
+
   <!-- MODAL: ZDJĘCIE PRZY ZWROCIE (Specjalne) -->
   <div class="modal" id="modalReturnPhoto">
     <div class="modal-content">
@@ -864,8 +918,7 @@
       </div>
       <div id="returnPhotoInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
       <label class="form-label">Zrób zdjęcie narzędzia (WYMAGANE)</label>
-      <input type="file" class="form-input" id="returnPhotoInput"
-        accept="image/*" capture="environment"
+      <input type="file" class="form-input" id="returnPhotoInput" accept="image/*" capture="environment"
         onchange="previewPhoto(this,'returnPhotoPreview')" style="height:auto;padding:15px;">
       <div id="returnPhotoPreview" style="margin:10px 0;text-align:center;"></div>
       <button class="btn btn-success" onclick="submitReturnWithPhoto()">Potwierdź zwrot ze zdjęciem</button>
@@ -880,6 +933,8 @@
         class="nav-icon">👥</span><span>Osoby</span></button>
     <button class="nav-btn" data-tab="narzedzia" onclick="switchTab('narzedzia', this)"><span
         class="nav-icon">🔧</span><span>Katalog</span></button>
+    <button class="nav-btn" data-tab="raporty" onclick="switchTab('raporty', this)"><span
+        class="nav-icon">📊</span><span>Raporty</span></button>
   </div>
 
   <!-- MODAL: DODAJ OSOBĘ -->
@@ -1289,7 +1344,7 @@
       var tabEl = document.getElementById(tabId);
       if (tabEl) tabEl.classList.add('active');
 
-      var titles = { log: 'Log operacji', osoby: 'Osoby', narzedzia: 'Katalog narzędzi' };
+      var titles = { log: 'Log operacji', osoby: 'Osoby', narzedzia: 'Katalog narzędzi', raporty: 'Raporty' };
       document.getElementById('headerTitle').textContent = titles[tab] || 'Magazyn';
     }
 
@@ -2345,6 +2400,15 @@
     function scoreItem(item, fields, query) {
       var q = normalize(query).trim();
       if (!q) return 1;
+
+      // SN priority: exact, ends-with (last 3+ digits), contains
+      if (item.sn) {
+        var snNorm = normalize(item.sn);
+        if (snNorm === q) return 1.0;
+        if (q.length >= 3 && snNorm.length >= q.length && snNorm.slice(-q.length) === q) return 0.98;
+        if (q.length >= 3 && snNorm.indexOf(q) !== -1) return 0.95;
+      }
+
       var words = q.split(/\s+/);
       var wordScores = [];
       for (var wi = 0; wi < words.length; wi++) {
@@ -2395,6 +2459,236 @@
         }
       }
       return counts;
+    }
+
+    /* =========================
+       RAPORTY
+    ========================= */
+    var currentRaportData = [];
+    var currentRaportColumns = [];
+    var currentRaportTitle = '';
+
+    function showRaport(title, columns, data) {
+      currentRaportTitle = title;
+      currentRaportColumns = columns;
+      currentRaportData = data;
+      document.getElementById('raportTitle').textContent = title;
+
+      var html = '<div id="raportPrintHeader" style="display:none;margin-bottom:20px;">';
+      html += '<h2 style="margin:0 0 5px 0;">' + esc(title) + '</h2>';
+      html += '<p style="margin:0;color:#636e72;">Data: ' + new Date().toLocaleDateString('pl-PL') + '</p>';
+      html += '</div>';
+
+      html += '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
+      html += '<thead><tr>';
+      for (var i = 0; i < columns.length; i++) {
+        html += '<th style="padding:10px;border:1px solid #ddd;background:#f8f9fa;text-align:left;">' + esc(columns[i].label) + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+
+      for (var j = 0; j < data.length; j++) {
+        var row = data[j];
+        html += '<tr>';
+        for (var k = 0; k < columns.length; k++) {
+          html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(String(row[columns[k].key] != null ? row[columns[k].key] : '')) + '</td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+
+      if (!data.length) html += '<div class="empty-msg">Brak danych do wyświetlenia</div>';
+
+      html += '<div id="raportPrintFooter" style="display:none;margin-top:30px;font-size:12px;color:#636e72;">';
+      html += 'Wygenerowano: ' + new Date().toLocaleString('pl-PL') + ' | Pozycji: ' + data.length;
+      html += '</div>';
+
+      document.getElementById('raportContent').innerHTML = html;
+      openModal('modalRaport');
+    }
+
+    function showRaportOsoby() {
+      if (!currentDetailOsoba) return;
+      var active = allLogEntries.filter(function (e) {
+        return e.osoba === currentDetailOsoba.imie && e.status === 'Wydane';
+      });
+
+      var data = [];
+      for (var i = 0; i < active.length; i++) {
+        var e = active[i];
+        data.push({
+          lp: i + 1,
+          nazwaSys: e.nazwaSys,
+          sn: e.sn || '',
+          kategoria: e.kategoria,
+          ilosc: e.ilosc,
+          dataWydania: e.dataWydania
+        });
+      }
+
+      showRaport(
+        'Protokół przekazania — ' + currentDetailOsoba.imie,
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'sn', label: 'SN' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'ilosc', label: 'Ilość' },
+          { key: 'dataWydania', label: 'Data wydania' }
+        ],
+        data
+      );
+    }
+
+    function showRaportWUzyciu() {
+      var active = allLogEntries.filter(function (e) { return e.status === 'Wydane'; });
+
+      var data = [];
+      for (var i = 0; i < active.length; i++) {
+        var e = active[i];
+        data.push({
+          lp: i + 1,
+          osoba: e.osoba,
+          nazwaSys: e.nazwaSys,
+          sn: e.sn || '',
+          kategoria: e.kategoria,
+          ilosc: e.ilosc,
+          dataWydania: e.dataWydania
+        });
+      }
+
+      showRaport(
+        'Narzędzia aktualnie w użyciu',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'osoba', label: 'Osoba' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'sn', label: 'SN' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'ilosc', label: 'Ilość' },
+          { key: 'dataWydania', label: 'Data wydania' }
+        ],
+        data
+      );
+    }
+
+    function showRaportNajczesciej() {
+      var counts = {};
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (!e.nazwaSys) continue;
+        if (!counts[e.nazwaSys]) counts[e.nazwaSys] = { nazwaSys: e.nazwaSys, kategoria: e.kategoria, count: 0, totalQty: 0 };
+        counts[e.nazwaSys].count++;
+        counts[e.nazwaSys].totalQty += e.ilosc;
+      }
+
+      var data = [];
+      for (var key in counts) data.push(counts[key]);
+      data.sort(function (a, b) { return b.count - a.count; });
+      for (var i = 0; i < data.length; i++) data[i].lp = i + 1;
+
+      showRaport(
+        'Najczęściej wydawane narzędzia',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'count', label: 'Liczba operacji' },
+          { key: 'totalQty', label: 'Łączna ilość' }
+        ],
+        data
+      );
+    }
+
+    function showRaportNajrzadziej() {
+      var counts = {};
+      for (var i = 0; i < allKatalog.length; i++) {
+        var k = allKatalog[i];
+        if (!counts[k.nazwaSys]) counts[k.nazwaSys] = { nazwaSys: k.nazwaSys, kategoria: k.kategoria, count: 0, totalQty: 0 };
+      }
+
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (!e.nazwaSys) continue;
+        if (!counts[e.nazwaSys]) counts[e.nazwaSys] = { nazwaSys: e.nazwaSys, kategoria: e.kategoria, count: 0, totalQty: 0 };
+        counts[e.nazwaSys].count++;
+        counts[e.nazwaSys].totalQty += e.ilosc;
+      }
+
+      var data = [];
+      for (var key in counts) data.push(counts[key]);
+      data.sort(function (a, b) { return a.count - b.count; });
+      for (var i = 0; i < data.length; i++) data[i].lp = i + 1;
+
+      showRaport(
+        'Najrzadziej wydawane narzędzia',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'count', label: 'Liczba operacji' },
+          { key: 'totalQty', label: 'Łączna ilość' }
+        ],
+        data
+      );
+    }
+
+    function showRaportInwentaryzacja() {
+      var data = [];
+      for (var i = 0; i < allKatalog.length; i++) {
+        var k = allKatalog[i];
+        var wydane = k.stanPoczatkowy - k.aktualnieNaStanie;
+        data.push({
+          lp: i + 1,
+          nazwaSys: k.nazwaSys,
+          nazwaWys: k.nazwaWys,
+          sn: k.sn || '',
+          kategoria: k.kategoria,
+          stanPoczatkowy: k.stanPoczatkowy,
+          aktualnie: k.aktualnieNaStanie,
+          wydane: wydane > 0 ? wydane : 0
+        });
+      }
+
+      showRaport(
+        'Inwentaryzacja — stan magazynu',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Nazwa systemowa' },
+          { key: 'nazwaWys', label: 'Nazwa wyświetlana' },
+          { key: 'sn', label: 'SN' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'stanPoczatkowy', label: 'Stan pocz.' },
+          { key: 'aktualnie', label: 'Na stanie' },
+          { key: 'wydane', label: 'Wydane' }
+        ],
+        data
+      );
+    }
+
+    function exportRaportCSV() {
+      if (!currentRaportData.length || !currentRaportColumns.length) {
+        toast('Brak danych do eksportu', 'error');
+        return;
+      }
+
+      var csv = '\uFEFF';
+      csv += currentRaportColumns.map(function (c) { return '"' + c.label + '"'; }).join(';') + '\n';
+
+      for (var i = 0; i < currentRaportData.length; i++) {
+        var row = currentRaportData[i];
+        csv += currentRaportColumns.map(function (c) {
+          var val = String(row[c.key] != null ? row[c.key] : '');
+          return '"' + val.replace(/"/g, '""') + '"';
+        }).join(';') + '\n';
+      }
+
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = currentRaportTitle.replace(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ _-]/g, '_') + '.csv';
+      link.click();
+      URL.revokeObjectURL(url);
     }
 
     /* =========================
