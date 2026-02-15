@@ -191,8 +191,9 @@ function getKatalog() {
 
   var katalog = data.map(function (r) {
     var sn = extractSN(r[COLS_KATALOG.SN]);
-    var kategoria = String(r[COLS_KATALOG.KATEGORIA] || '');
+    var kategoria = String(r[COLS_KATALOG.KATEGORIA] || '').trim().toUpperCase();
     if (sn) kategoria = 'E';
+    else if (kategoria !== 'E' && kategoria !== 'Z') kategoria = 'N';
     return {
       id: String(r[COLS_KATALOG.ID]),
       nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''),
