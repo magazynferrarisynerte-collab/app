@@ -65,6 +65,56 @@ function extractSN(raw) {
   return str;
 }
 
+function simplifyToolName(fullName) {
+  if (!fullName) return '';
+  var name = String(fullName);
+
+  // Usuń angielskie nazwy i inne treści w nawiasach
+  name = name.replace(/\s*\([^)]*\)\s*/g, ' ');
+
+  var brands = [
+    'STANLEY', 'MAKITA', 'BOSCH', 'YATO', 'DEWALT', 'MILWAUKEE', 'HILTI',
+    'METABO', 'FESTOOL', 'STIHL', 'HUSQVARNA', 'KARCHER', 'RYOBI', 'EINHELL',
+    'PARKSIDE', 'GRAPHITE', 'DEDRA', 'TOPEX', 'VOREL', 'STHOR', 'NEO',
+    'PROLINE', 'HOGERT', 'BAHCO', 'KNIPEX', 'WIHA', 'WERA', 'IRWIN',
+    'TAJIMA', 'STABILA', 'WURTH', 'FISCHER', 'RAWLPLUG', 'WOLFCRAFT'
+  ];
+
+  var colors = [
+    'ZOLTA', 'ŻÓŁTA', 'ZÓŁTA', 'CZARNA', 'CZERWONA', 'ZIELONA', 'NIEBIESKA',
+    'BIALA', 'BIAŁA', 'SZARA', 'POMARANCZOWA', 'FIOLETOWA', 'BRAZOWA', 'BRĄZOWA',
+    'SREBRNA', 'ZLOTA', 'ZŁOTA'
+  ];
+
+  var words = name.trim().split(/\s+/);
+  var result = [];
+
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i];
+    var wUp = w.toUpperCase();
+
+    // Pomiń marki
+    if (brands.indexOf(wUp) !== -1) continue;
+
+    // Pomiń numery modeli (30-457, 12345+)
+    if (/^\d{2,}-\d+/.test(w)) continue;
+    if (/^\d{5,}$/.test(w)) continue;
+
+    // Pomiń kolory
+    if (colors.indexOf(wUp) !== -1) continue;
+
+    // Pomiń wymiary NxN (300X175, 150x50)
+    if (/^\d+[Xx]\d+/.test(w)) continue;
+
+    // Zachowaj proste miary (8M, 5M, 10MM, 2.5M) ale pomiń długie kody (300MM+)
+    if (/^\d{3,}[Mm]{1,2}$/.test(w)) continue;
+
+    result.push(w);
+  }
+
+  return result.join(' ').trim();
+}
+
 function formatDate(d) {
   if (!d) return '';
   try {
@@ -207,6 +257,30 @@ function addKatalogItem(nazwaSys, nazwaWys, kategoria, sn, stanPoczatkowy) {
     sheet.appendRow([id, nazwaSys.trim(), nazwaWys.trim(), kategoria, sn || '', qty, qty]);
     CacheService.getScriptCache().remove("katalog");
     return { success: true, id: id };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
+}
+
+function changeKategoria(idKatalog, nowaKategoria) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_KATALOG);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Katalog pusty' };
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (String(data[i][COLS_KATALOG.ID]) === idKatalog) {
+        sheet.getRange(i + 2, COLS_KATALOG.KATEGORIA + 1).setValue(nowaKategoria);
+        CacheService.getScriptCache().remove("katalog");
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Nie znaleziono pozycji' };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
@@ -719,8 +793,8 @@ function migrateWypozyczenia() {
     var ilosc = Number(r[9]) || 1;
     var hasReturn = dataZwr && String(dataZwr).length > 0;
 
-    // Nazwa_Systemowa: "KOD — NAZWA" (jeśli KOD istnieje)
-    var nazwaSys = kod ? (kod + ' — ' + nazwa) : nazwa;
+    // Nazwa_Systemowa: oryginalna nazwa
+    var nazwaSys = nazwa || kod;
 
     // Próba wyciągnięcia SN z opisu
     var sn = extractSN(opis);
@@ -773,9 +847,9 @@ function migrateNarzedzia() {
 
     if (!kod && !nazwa) continue;
 
-    // Nazwa_Systemowa: "KOD — NAZWA"
-    var nazwaSys = kod ? (kod + ' — ' + nazwa) : nazwa;
-    var nazwaWys = nazwa || kod;
+    // Nazwa_Systemowa: oryginalna pełna nazwa
+    var nazwaSys = nazwa || kod;
+    var nazwaWys = simplifyToolName(nazwa) || nazwa || kod;
 
     // Wyciągnij SN z opisu
     var sn = extractSN(opis);

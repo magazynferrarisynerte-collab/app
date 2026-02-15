@@ -1619,21 +1619,27 @@
         var sCls = n.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
         var sTxt = n.aktualnieNaStanie > 0 ? 'Dostępne: ' + n.aktualnieNaStanie : 'Brak';
         var katBadge = getKategoriaBadge(n.kategoria);
+        // Tytuł: nazwa + SN dla elektronarzędzi
+        var titleText = esc(n.nazwaWys);
+        if (n.sn && (n.kategoria === 'elektronarzedzia' || n.kategoria === 'specjalne')) {
+          titleText += ' <span style="color:#8b5cf6;font-weight:normal;font-size:13px;">SN: ' + esc(n.sn) + '</span>';
+        }
+
         h += '<div class="narz-card">'
           + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:center;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap;">'
-          + '<b style="font-size:16px;">' + esc(n.nazwaWys) + '</b>'
+          + '<b style="font-size:16px;">' + titleText + '</b>'
           + katBadge
           + '</div>'
           + '<span class="status-badge ' + sCls + '">' + sTxt + '</span>'
           + '</div>'
           + '<div style="font-size:13px;color:#636e72;">'
           + esc(n.nazwaSys)
-          + (n.sn ? ' | SN: ' + esc(n.sn) : '')
           + ' | Stan: ' + n.aktualnieNaStanie + '/' + n.stanPoczatkowy
           + '</div>'
-          + '<div style="margin-top:4px;">'
+          + '<div style="margin-top:4px;display:flex;gap:15px;">'
           + '<span onclick="openDamageModal(\'' + esc(n.nazwaSys) + '\',\'' + esc(n.sn) + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">Zgłoś uszkodzenie</span>'
+          + (n.kategoria !== 'zuzywalne' ? '<span onclick="przesunDoZuzywalnych(\'' + esc(n.id) + '\',\'' + esc(n.nazwaWys) + '\')" style="color:#f59e0b;cursor:pointer;font-size:12px;">Przesuń do zużywalnych</span>' : '')
           + '</div>'
           + '</div>';
       }
@@ -2214,6 +2220,26 @@
           toast("Błąd: " + err.message, "error");
         })
         .zglosUszkodzenie(damageNazwaSys, damageSN, opis, ilosc);
+    }
+
+    function przesunDoZuzywalnych(idKatalog, nazwaWys) {
+      if (!confirm('Przesunąć "' + nazwaWys + '" do kategorii zużywalne?')) return;
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast('Przeniesiono do zużywalnych', 'success');
+            loadKatalog();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .changeKategoria(idKatalog, 'zuzywalne');
     }
 
     /* =========================
