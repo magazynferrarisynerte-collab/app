@@ -1019,6 +1019,16 @@
           <button class="close-btn" onclick="closeModal('modalWypozycz')"
             style="position:static;font-size:28px;">&times;</button>
         </div>
+        <div id="wypKatFilters" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+          <button class="filter-btn active" onclick="filterWypKategoria('all',this)"
+            style="padding:8px;font-size:13px;">Wszystkie</button>
+          <button class="filter-btn" onclick="filterWypKategoria('E',this)"
+            style="padding:8px;font-size:13px;">Ewid.</button>
+          <button class="filter-btn" onclick="filterWypKategoria('N',this)"
+            style="padding:8px;font-size:13px;">Nieewid.</button>
+          <button class="filter-btn" onclick="filterWypKategoria('Z',this)"
+            style="padding:8px;font-size:13px;">Zużyw.</button>
+        </div>
         <div id="wypCollapsedBar" onclick="wypExpandUI()">Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
         </div>
 
@@ -1064,6 +1074,7 @@
     ========================= */
     var currentLogFilter = 'active';
     var currentNarzKategoria = 'all';
+    var currentWypKategoria = 'all';
     var returnCartIds = [];
     var currentDetailOsoba = null;
     var currentReturnOpId = null;
@@ -2060,6 +2071,14 @@
       renderWypOsobyList(scoredSearch(allOsoby, ['imie', 'telefon'], q));
     }
 
+    function resetWypKatFilters() {
+      currentWypKategoria = 'all';
+      var btns = document.getElementById('wypKatFilters');
+      if (btns) btns.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      var first = btns && btns.querySelector('.filter-btn');
+      if (first) first.classList.add('active');
+    }
+
     function wypSkipOsoba() {
       wypOsobaId = null;
       wypOsobaName = '';
@@ -2070,6 +2089,7 @@
       document.getElementById('wypNarzSearch').value = '';
       document.getElementById('wypWhatsBtn').style.display = 'none';
       wypCartItems = [];
+      resetWypKatFilters();
       renderWypNarzList(allKatalogGrouped);
       renderWypCart();
       setupNarzScrollCollapse();
@@ -2084,6 +2104,7 @@
       document.getElementById('wypStep2').classList.remove('narz-collapsed');
       document.getElementById('wypNarzSearch').value = '';
       wypCartItems = [];
+      resetWypKatFilters();
       // Show/hide WhatsApp button based on phone
       var osoba = null;
       for (var i = 0; i < allOsoby.length; i++) {
@@ -2258,14 +2279,35 @@
 
     function filterWypNarz() {
       var q = document.getElementById('wypNarzSearch').value;
-      if (!q) { renderWypNarzList(allKatalogGrouped); return; }
-      renderWypNarzList(scoredSearch(allKatalogGrouped, ['nazwaWys', 'kategoria'], q));
+      var list = document.getElementById('wypNarzList');
+      if (list) list.scrollTop = 0;
+      var filtered = allKatalogGrouped;
+      if (currentWypKategoria !== 'all') {
+        filtered = filtered.filter(function (n) { return n.kategoria === currentWypKategoria; });
+      }
+      if (q) {
+        filtered = scoredSearch(filtered, ['nazwaWys', 'kategoria'], q);
+      }
+      renderWypNarzList(filtered);
+    }
+
+    function filterWypKategoria(kat, btn) {
+      currentWypKategoria = kat;
+      document.getElementById('wypKatFilters').querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      filterWypNarz();
     }
 
     function getFilteredGrouped() {
       var q = document.getElementById('wypNarzSearch').value;
-      if (!q) return allKatalogGrouped;
-      return scoredSearch(allKatalogGrouped, ['nazwaWys', 'kategoria'], q);
+      var filtered = allKatalogGrouped;
+      if (currentWypKategoria !== 'all') {
+        filtered = filtered.filter(function (n) { return n.kategoria === currentWypKategoria; });
+      }
+      if (q) {
+        filtered = scoredSearch(filtered, ['nazwaWys', 'kategoria'], q);
+      }
+      return filtered;
     }
 
     function renderWypLastAdded() {
