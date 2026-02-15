@@ -1739,7 +1739,11 @@
         var g = data[i]; // grouped item
         var katBadge = getKategoriaBadge(g.kategoria);
         var cleanName = simplifyName(g.nazwaWys) || simplifyName(g.nazwaSys) || g.nazwaWys;
+        var firstItem = g.items && g.items[0] ? g.items[0] : g;
         var titleText = esc(cleanName);
+        if (g.kategoria === 'E' && firstItem.sn) {
+          titleText += ' <span style="color:#8b5cf6;font-weight:normal;font-size:13px;">SN: ' + esc(firstItem.sn) + '</span>';
+        }
         var itemCount = g.items ? g.items.length : 1;
 
         // Status
@@ -1902,7 +1906,10 @@
       var groups = {};
       for (var i = 0; i < items.length; i++) {
         var n = items[i];
-        var key = (simplifyName(n.nazwaWys) || simplifyName(n.nazwaSys) || n.nazwaWys).toLowerCase();
+        // E (ewidencjonowane) — każdy egzemplarz osobno, reszta — grupuj po uproszczonej nazwie
+        var key = n.kategoria === 'E'
+          ? 'E_' + n.id
+          : (simplifyName(n.nazwaWys) || simplifyName(n.nazwaSys) || n.nazwaWys).toLowerCase();
         if (!groups[key]) {
           groups[key] = {
             nazwaWys: n.nazwaWys,
