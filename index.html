@@ -1216,12 +1216,20 @@
     function returnCartSubmit() {
       if (!returnCartIds.length) return;
 
-      // Check if any items had photos at issuance — collect return photos
+      // Check if any items are flagged or had issuance photos — collect return photos
       var photoIds = [];
       for (var i = 0; i < returnCartIds.length; i++) {
         for (var j = 0; j < allLogEntries.length; j++) {
-          if (allLogEntries[j].idOp === returnCartIds[i] && allLogEntries[j].zdjecieWydanieUrl) {
-            photoIds.push(returnCartIds[i]);
+          if (allLogEntries[j].idOp === returnCartIds[i]) {
+            var needPhoto = !!allLogEntries[j].zdjecieWydanieUrl;
+            if (!needPhoto) {
+              for (var fk = 0; fk < allKatalog.length; fk++) {
+                if (allKatalog[fk].nazwaSys === allLogEntries[j].nazwaSys && allKatalog[fk].flaga) {
+                  needPhoto = true; break;
+                }
+              }
+            }
+            if (needPhoto) photoIds.push(returnCartIds[i]);
             break;
           }
         }
@@ -1486,8 +1494,18 @@
       }
       if (!logItem) return;
 
-      if (logItem.zdjecieWydanieUrl) {
-        // Item had issuance photo — require return photo
+      // Check if item is flagged in catalog or had issuance photo
+      var isFlagged = logItem.zdjecieWydanieUrl;
+      if (!isFlagged) {
+        for (var fi = 0; fi < allKatalog.length; fi++) {
+          if (allKatalog[fi].nazwaSys === logItem.nazwaSys && allKatalog[fi].flaga) {
+            isFlagged = true; break;
+          }
+        }
+      }
+
+      if (isFlagged) {
+        // Flagged item or had issuance photo — require return photo
         currentReturnOpId = idOp;
         document.getElementById('returnPhotoInfo').innerHTML =
           '<b>' + esc(simplifyName(logItem.nazwaSys) || logItem.nazwaSys) + '</b>' +
@@ -1732,9 +1750,18 @@
           sTxt = g.aktualnieNaStanie > 0 ? 'Dostępne: ' + g.aktualnieNaStanie : 'Brak';
         }
 
+        // Flaga — toggle dla wszystkich itemów grupy
+        var flagIds = [];
+        if (g.items) { for (var fi = 0; fi < g.items.length; fi++) flagIds.push(g.items[fi].id); }
+        var flagActive = g.flaga;
+        var flagStyle = flagActive
+          ? 'color:#ef4444;cursor:pointer;font-size:18px;'
+          : 'color:#cbd5e1;cursor:pointer;font-size:18px;';
+
         h += '<div class="narz-card">'
           + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:center;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap;">'
+          + '<span onclick="event.stopPropagation();toggleFlaga(' + JSON.stringify(flagIds).replace(/"/g, '&quot;') + ')" style="' + flagStyle + '" title="' + (flagActive ? 'Oflagowane — zdjęcie przy wydaniu/zwrocie' : 'Kliknij aby oflagować') + '">&#9873;</span>'
           + '<b style="font-size:16px;">' + titleText + '</b>'
           + katBadge
           + (itemCount > 1 ? ' <span style="font-size:12px;color:#636e72;">(' + itemCount + ' szt.)</span>' : '')
@@ -1743,9 +1770,11 @@
           + '</div>';
 
         if (g.kategoria === 'Z') {
-          h += '<div style="margin-top:4px;display:flex;gap:15px;align-items:center;">'
+          var consumed = g.stanPoczatkowy - g.aktualnieNaStanie;
+          h += '<div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
             + '<span style="font-size:12px;color:#636e72;">' + g.aktualnieNaStanie + '/' + g.stanPoczatkowy + '</span>'
             + (g.aktualnieNaStanie > 0 ? '<button onclick="event.stopPropagation();szybkieWydaj(\'' + esc(g.nazwaWys) + '\',\'' + esc(g.kategoria) + '\')" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">Wydaj</button>' : '<span style="color:#ef4444;font-size:12px;">Brak na stanie</span>')
+            + (consumed > 0 ? '<button onclick="event.stopPropagation();uzupelnijStan(\'' + esc(g.nazwaWys) + '\')" style="background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">Uzupełnij</button>' : '')
             + '</div>';
         } else {
           // Lista SN dla E z wieloma egzemplarzami
@@ -1875,11 +1904,13 @@
             nazwaWys: n.nazwaWys,
             nazwaSys: n.nazwaSys,
             kategoria: n.kategoria,
+            flaga: false,
             aktualnieNaStanie: 0,
             stanPoczatkowy: 0,
             items: []
           };
         }
+        if (n.flaga) groups[key].flaga = true;
         groups[key].aktualnieNaStanie += n.aktualnieNaStanie;
         groups[key].stanPoczatkowy += n.stanPoczatkowy;
         groups[key].items.push(n);
@@ -2051,13 +2082,13 @@
       currentSelectedGroup = group;
 
       var kat = group.kategoria;
-      var panel = document.getElementById('wypDynamicFields');
-      var html = '<div class="dynamic-fields">';
-      html += '<div style="font-weight:bold;font-size:16px;margin-bottom:10px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</div>';
 
       if (kat === 'E') {
-        // Ewidencjonowane — SN dropdown, qty=1
+        // Ewidencjonowane — potrzeba wyboru SN
+        var panel = document.getElementById('wypDynamicFields');
         var availableItems = group.items.filter(function (it) { return it.aktualnieNaStanie > 0 && it.sn; });
+        var html = '<div class="dynamic-fields">';
+        html += '<div style="font-weight:bold;font-size:16px;margin-bottom:10px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</div>';
         html += '<label>Wybierz egzemplarz (SN):</label>';
         html += '<select id="wypSNSelect">';
         if (availableItems.length === 0) {
@@ -2068,58 +2099,23 @@
           }
         }
         html += '</select>';
-        html += '<label>Ilość:</label>';
-        html += '<input type="number" id="wypQtyInput" value="1" min="1" max="1" readonly>';
+        html += '<button class="btn btn-primary" onclick="wypAddSNToCart()" style="height:50px;font-size:15px;margin-top:15px;">Dodaj do koszyka</button>';
+        html += '</div>';
+        panel.innerHTML = html;
+        panel.style.display = 'block';
       } else {
-        // N / Z — no SN, quantity input
-        var maxAvailable = group.totalStock;
-        for (var c = 0; c < wypCartItems.length; c++) {
-          if (wypCartItems[c].nazwaWys === nazwaWys) maxAvailable -= wypCartItems[c].qty;
-        }
-        html += '<label>Ilość:</label>';
-        html += '<input type="number" id="wypQtyInput" value="1" min="1" max="' + maxAvailable + '">';
+        // N / Z — od razu do koszyka (qty=1)
+        document.getElementById('wypDynamicFields').style.display = 'none';
+        finishAddToCart(nazwaWys, '', 1, kat, null);
       }
-
-      // Opcjonalne zdjęcie (dla dowolnej kategorii)
-      html += '<label>Zdjęcie (opcjonalne):</label>';
-      html += '<input type="file" id="wypPhotoInput" accept="image/*" capture="environment" onchange="previewPhoto(this,\'wypPhotoPreview\')">';
-      html += '<div class="photo-preview" id="wypPhotoPreview"></div>';
-
-      html += '<button class="btn btn-primary" onclick="wypAddToCartFromFields()" style="height:50px;font-size:15px;margin-top:15px;">Dodaj do koszyka</button>';
-      html += '</div>';
-
-      panel.innerHTML = html;
-      panel.style.display = 'block';
     }
 
-    function wypAddToCartFromFields() {
+    function wypAddSNToCart() {
       if (!currentSelectedGroup) return;
-      var kat = currentSelectedGroup.kategoria;
-      var nazwaWys = currentSelectedGroup.nazwaWys;
-      var sn = '';
-      var qty = 1;
-      var photoBase64 = null;
-
-      if (kat === 'E') {
-        var snSelect = document.getElementById('wypSNSelect');
-        sn = snSelect ? snSelect.value : '';
-        if (!sn) { toast('Wybierz egzemplarz (SN)', 'error'); return; }
-        qty = 1;
-      } else {
-        qty = parseInt(document.getElementById('wypQtyInput').value) || 1;
-        if (qty < 1) { toast('Podaj ilość', 'error'); return; }
-      }
-
-      // Optional photo for any category
-      var photoInput = document.getElementById('wypPhotoInput');
-      if (photoInput && photoInput.files && photoInput.files[0]) {
-        compressImage(photoInput.files[0], 1024, 0.6, function (base64) {
-          finishAddToCart(nazwaWys, sn, qty, kat, base64);
-        });
-        return;
-      }
-
-      finishAddToCart(nazwaWys, sn, qty, kat, null);
+      var snSelect = document.getElementById('wypSNSelect');
+      var sn = snSelect ? snSelect.value : '';
+      if (!sn) { toast('Wybierz egzemplarz (SN)', 'error'); return; }
+      finishAddToCart(currentSelectedGroup.nazwaWys, sn, 1, 'E', null);
     }
 
     function finishAddToCart(nazwaWys, sn, qty, kategoria, photoBase64) {
@@ -2151,6 +2147,7 @@
         qty: qty,
         max: group.totalStock,
         kategoria: kategoria,
+        flaga: group.flaga || false,
         photoBase64: photoBase64
       });
 
@@ -2190,6 +2187,19 @@
       renderWypNarzList(getFilteredGrouped());
     }
 
+    function wypCartAddPhoto(idx, input) {
+      if (!input.files || !input.files[0]) return;
+      compressImage(input.files[0], 1024, 0.6, function (base64) {
+        wypCartItems[idx].photoBase64 = base64;
+        renderWypCart();
+      });
+    }
+
+    function wypCartRemovePhoto(idx) {
+      wypCartItems[idx].photoBase64 = null;
+      renderWypCart();
+    }
+
     function renderWypCart() {
       var container = document.getElementById('wypCart');
       var btn = document.getElementById('wypSubmitBtn');
@@ -2210,12 +2220,11 @@
       for (var i = 0; i < wypCartItems.length; i++) {
         var c = wypCartItems[i];
         var canChangeQty = (c.kategoria !== 'E');
-        h += '<div class="cart-item">'
-          + '<div style="flex:1;">'
+        h += '<div class="cart-item" style="flex-wrap:wrap;">'
+          + '<div style="flex:1;min-width:0;">'
           + '<b>' + esc(c.nazwaWys) + '</b>'
-          + (c.sn ? '<br><span style="font-size:12px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
-          + '<br><span style="font-size:12px;color:#636e72;">' + getKategoriaBadge(c.kategoria) + '</span>'
-          + (c.photoBase64 ? '<br><span style="font-size:11px;color:#10b981;">Zdjęcie OK</span>' : '')
+          + (c.sn ? ' <span style="font-size:12px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
+          + ' ' + getKategoriaBadge(c.kategoria)
           + '</div>';
 
         if (canChangeQty) {
@@ -2228,8 +2237,27 @@
           h += '<span class="qty-val">1</span>';
         }
 
-        h += '<button class="remove-cart-btn" onclick="wypRemoveFromCart(' + i + ')" style="margin-left:10px;">✕</button>'
-          + '</div>';
+        h += '<button class="remove-cart-btn" onclick="wypRemoveFromCart(' + i + ')" style="margin-left:10px;">✕</button>';
+
+        // Opcja zdjęcia (wymagane dla oflagowanych)
+        h += '<div style="width:100%;margin-top:6px;display:flex;align-items:center;gap:8px;">';
+        if (c.photoBase64) {
+          h += '<span style="font-size:11px;color:#10b981;">Zdjęcie OK</span>'
+            + '<span onclick="wypCartRemovePhoto(' + i + ')" style="font-size:11px;color:#ef4444;cursor:pointer;">Usuń</span>';
+        } else if (c.flaga) {
+          h += '<label style="font-size:12px;color:#ef4444;cursor:pointer;margin:0;font-weight:bold;">'
+            + '<input type="file" accept="image/*" capture="environment" onchange="wypCartAddPhoto(' + i + ',this)" style="display:none;">'
+            + '&#9873; Zdjęcie wymagane!'
+            + '</label>';
+        } else {
+          h += '<label style="font-size:12px;color:#667eea;cursor:pointer;margin:0;">'
+            + '<input type="file" accept="image/*" capture="environment" onchange="wypCartAddPhoto(' + i + ',this)" style="display:none;">'
+            + 'Dodaj zdjęcie'
+            + '</label>';
+        }
+        h += '</div>';
+
+        h += '</div>';
       }
       container.innerHTML = h;
     }
@@ -2249,6 +2277,10 @@
         }
         if (item.kategoria === 'E' && !item.sn) {
           toast("SN wymagany dla: " + item.nazwaWys, "error");
+          return;
+        }
+        if (item.flaga && !item.photoBase64) {
+          toast("Zdjęcie wymagane dla oflagowanego: " + item.nazwaWys, "error");
           return;
         }
       }
@@ -2373,6 +2405,35 @@
         .zglosUszkodzenie(damageNazwaSys, damageSN, opis, ilosc);
     }
 
+    function toggleFlaga(ids) {
+      // Optymistyczny toggle lokalnie
+      var newState = null;
+      for (var i = 0; i < allKatalog.length; i++) {
+        for (var j = 0; j < ids.length; j++) {
+          if (allKatalog[i].id === ids[j]) {
+            if (newState === null) newState = !allKatalog[i].flaga;
+            allKatalog[i].flaga = newState;
+          }
+        }
+      }
+      applyNarzFilters();
+
+      // Backend toggle dla każdego ID
+      var pending = ids.length;
+      for (var k = 0; k < ids.length; k++) {
+        google.script.run
+          .withSuccessHandler(function () {
+            pending--;
+            if (pending === 0) loadKatalogBackground();
+          })
+          .withFailureHandler(function () {
+            pending--;
+            if (pending === 0) loadKatalogBackground();
+          })
+          .toggleFlaga(ids[k]);
+      }
+    }
+
     function przesunDoZuzywalnych(idKatalog, nazwaWys) {
       if (!confirm('Przesunąć "' + nazwaWys + '" do kategorii zużywalne?')) return;
       showLoading();
@@ -2420,6 +2481,40 @@
           loadKatalogBackground();
         })
         .wydajBatch('', [{ nazwaWys: nazwaWys, sn: '', qty: 1, kategoria: kategoria, photoBase64: null }]);
+    }
+
+    function uzupelnijStan(nazwaWys) {
+      var qtyStr = prompt('Ile sztuk uzupełnić dla "' + nazwaWys + '"?', '1');
+      if (!qtyStr) return;
+      var qty = parseInt(qtyStr);
+      if (!qty || qty < 1) { toast('Podaj prawidłową ilość', 'error'); return; }
+
+      // Optymistyczny update
+      for (var i = 0; i < allKatalog.length; i++) {
+        if (allKatalog[i].nazwaWys === nazwaWys) {
+          var max = allKatalog[i].stanPoczatkowy - allKatalog[i].aktualnieNaStanie;
+          var add = Math.min(qty, max);
+          allKatalog[i].aktualnieNaStanie += add;
+          break;
+        }
+      }
+      applyNarzFilters();
+      toast('Uzupełniono ' + qty + 'x ' + nazwaWys, 'success');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            loadKatalogBackground();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+            loadKatalogBackground();
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+          loadKatalogBackground();
+        })
+        .uzupelnijStan(nazwaWys, qty);
     }
 
     /* =========================

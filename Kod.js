@@ -18,7 +18,8 @@ const COLS_KATALOG = {
   KATEGORIA: 3,
   SN: 4,
   STAN_POCZATKOWY: 5,
-  AKTUALNIE_NA_STANIE: 6
+  AKTUALNIE_NA_STANIE: 6,
+  FLAGA: 7
 };
 
 const COLS_PRZES = {
@@ -187,13 +188,14 @@ function getKatalog() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
 
   var katalog = data.map(function (r) {
     var sn = extractSN(r[COLS_KATALOG.SN]);
     var kategoria = String(r[COLS_KATALOG.KATEGORIA] || '').trim().toUpperCase();
     if (sn) kategoria = 'E';
     else if (kategoria !== 'E' && kategoria !== 'Z') kategoria = 'N';
+    var flagVal = r[COLS_KATALOG.FLAGA];
     return {
       id: String(r[COLS_KATALOG.ID]),
       nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''),
@@ -201,7 +203,8 @@ function getKatalog() {
       kategoria: kategoria,
       sn: sn,
       stanPoczatkowy: Number(r[COLS_KATALOG.STAN_POCZATKOWY]) || 0,
-      aktualnieNaStanie: Number(r[COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0
+      aktualnieNaStanie: Number(r[COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0,
+      flaga: flagVal === true || flagVal === 1 || String(flagVal) === '1'
     };
   }).sort(function (a, b) {
     return a.nazwaWys.localeCompare(b.nazwaWys);
@@ -224,18 +227,21 @@ function getKatalogGrouped() {
       groups[key] = {
         nazwaWys: k.nazwaWys,
         kategoria: k.kategoria,
+        flaga: false,
         totalStock: 0,
         totalPoczatkowy: 0,
         items: []
       };
     }
+    if (k.flaga) groups[key].flaga = true;
     groups[key].totalStock += k.aktualnieNaStanie;
     groups[key].totalPoczatkowy += k.stanPoczatkowy;
     groups[key].items.push({
       id: k.id,
       nazwaSys: k.nazwaSys,
       sn: k.sn,
-      aktualnieNaStanie: k.aktualnieNaStanie
+      aktualnieNaStanie: k.aktualnieNaStanie,
+      flaga: k.flaga
     });
   }
 
@@ -255,7 +261,7 @@ function addKatalogItem(nazwaSys, nazwaWys, kategoria, sn, stanPoczatkowy) {
     var sheet = getSheet(SHEET_KATALOG);
     var id = generateId('KT');
     var qty = Number(stanPoczatkowy) || 1;
-    sheet.appendRow([id, nazwaSys.trim(), nazwaWys.trim(), kategoria, sn || '', qty, qty]);
+    sheet.appendRow([id, nazwaSys.trim(), nazwaWys.trim(), kategoria, sn || '', qty, qty, 0]);
     CacheService.getScriptCache().remove("katalog");
     return { success: true, id: id };
   } catch (e) {
@@ -279,6 +285,33 @@ function changeKategoria(idKatalog, nowaKategoria) {
         sheet.getRange(i + 2, COLS_KATALOG.KATEGORIA + 1).setValue(nowaKategoria);
         CacheService.getScriptCache().remove("katalog");
         return { success: true };
+      }
+    }
+    return { success: false, error: 'Nie znaleziono pozycji' };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
+}
+
+function toggleFlaga(idKatalog) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_KATALOG);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Katalog pusty' };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === idKatalog) {
+        var cell = sheet.getRange(i + 2, COLS_KATALOG.FLAGA + 1);
+        var current = cell.getValue();
+        var newVal = (current === 1 || current === true || String(current) === '1') ? 0 : 1;
+        cell.setValue(newVal);
+        CacheService.getScriptCache().remove("katalog");
+        return { success: true, flaga: newVal === 1 };
       }
     }
     return { success: false, error: 'Nie znaleziono pozycji' };
@@ -594,6 +627,38 @@ function decrementStock(katSheet, nazwaSys, qty) {
       katSheet.getRange(i + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(Math.max(0, stan - qty));
       break;
     }
+  }
+}
+
+// ============================================
+// UZUPEŁNIENIE STANU (np. zwrot zużywalnych)
+// ============================================
+
+function uzupelnijStan(nazwaWys, qty) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_KATALOG);
+    var data = sheet.getDataRange().getValues();
+    var updated = 0;
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][COLS_KATALOG.NAZWA_WYSWIETLANA]) === nazwaWys) {
+        var stan = Number(data[i][COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0;
+        var pocz = Number(data[i][COLS_KATALOG.STAN_POCZATKOWY]) || 0;
+        var newStan = Math.min(stan + qty, pocz);
+        sheet.getRange(i + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(newStan);
+        updated += (newStan - stan);
+        break;
+      }
+    }
+
+    CacheService.getScriptCache().remove("katalog");
+    return { success: true, updated: updated };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
   }
 }
 
