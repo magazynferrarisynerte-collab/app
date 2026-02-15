@@ -74,7 +74,7 @@
     }
 
     #wypNarzList {
-      max-height: 520px;
+      max-height: 620px;
       overflow-y: auto;
       background: #fff;
       border-radius: 15px;
@@ -94,7 +94,7 @@
     #wypStep2 {
       display: flex;
       flex-direction: column;
-      height: calc(100dvh - 120px);
+      height: calc(100dvh - 50px);
     }
 
     #wypStep2 #wypLastAdded {
@@ -107,8 +107,7 @@
     }
 
     #wypStep2 #wypCartSection {
-      flex-shrink: 0;
-      max-height: 40vh;
+      flex: 1;
       overflow-y: auto;
     }
 
@@ -129,7 +128,7 @@
 
     body {
       font-size: 18px;
-      padding-bottom: 120px;
+      padding-bottom: 80px;
     }
 
     #modalWypozycz .picker-item {
@@ -173,9 +172,15 @@
       display: none !important;
     }
 
-    #wypStep2.narz-collapsed #wypNarzSearch {
-      margin-bottom: 5px;
+    #wypStep2:not(.narz-collapsed) #wypNarzList,
+    #wypStep2:not(.narz-collapsed) #wypDynamicFields,
+    #wypStep2:not(.narz-collapsed) #wypKatFilters,
+    #wypStep2:not(.narz-collapsed) #wypCollapsedBar,
+    #wypStep2:not(.narz-collapsed) #wypSearchRow,
+    #wypStep2:not(.narz-collapsed) #wypLastAdded {
+      display: none !important;
     }
+
 
     #wypStep2 #wypCollapsedBar {
       display: none;
@@ -288,7 +293,7 @@
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 25px 15px;
+      padding: 8px 15px;
       text-align: center;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
       position: sticky;
@@ -297,7 +302,7 @@
     }
 
     .header h1 {
-      font-size: 24px;
+      font-size: 16px;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
@@ -337,9 +342,9 @@
       bottom: 0;
       left: 0;
       right: 0;
-      height: 100px;
+      height: 64px;
       background: white;
-      border-top: 2px solid #dfe6e9;
+      border-top: 1px solid #dfe6e9;
       display: flex;
       z-index: 1000;
     }
@@ -353,13 +358,14 @@
       align-items: center;
       justify-content: center;
       color: #b2bec3;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
+      padding: 2px 0;
     }
 
     .nav-icon {
-      font-size: 35px;
-      margin-bottom: 5px;
+      font-size: 28px;
+      margin-bottom: 1px;
     }
 
     .nav-btn.active {
@@ -1028,7 +1034,7 @@
           <button onclick="wypChangeOsoba()"
             style="color: #667eea; border:none; background:none; font-weight:bold; font-size:14px; cursor:pointer;">Zmień</button>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <div id="wypSearchRow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
           <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
             oninput="filterWypNarz()" style="flex:1;height:50px;font-size:18px;margin-bottom:0;">
           <button class="close-btn" onclick="closeModal('modalWypozycz')"
@@ -2102,7 +2108,7 @@
       document.getElementById('wypPersonName').innerHTML = '<span style="color:#f59e0b;font-weight:bold;">Bez osoby (zużywalne)</span>';
       document.getElementById('wypStep1').style.display = 'none';
       document.getElementById('wypStep2').style.display = 'flex';
-      document.getElementById('wypStep2').classList.remove('narz-collapsed');
+      document.getElementById('wypStep2').classList.add('narz-collapsed');
       document.getElementById('wypNarzSearch').value = '';
       document.getElementById('wypWhatsBtn').style.display = 'none';
       wypCartItems = [];
@@ -2118,7 +2124,7 @@
       document.getElementById('wypPersonName').innerHTML = '<b>' + esc(name) + '</b>';
       document.getElementById('wypStep1').style.display = 'none';
       document.getElementById('wypStep2').style.display = 'flex';
-      document.getElementById('wypStep2').classList.remove('narz-collapsed');
+      document.getElementById('wypStep2').classList.add('narz-collapsed');
       document.getElementById('wypNarzSearch').value = '';
       wypCartItems = [];
       resetWypKatFilters();
@@ -2151,7 +2157,6 @@
 
     function wypExpandUI() {
       document.getElementById('wypStep2').classList.remove('narz-collapsed');
-      document.getElementById('wypLastAdded').style.display = 'none';
     }
 
     function wypChangeOsoba() {
@@ -2332,9 +2337,6 @@
     function renderWypLastAdded() {
       var laEl = document.getElementById('wypLastAdded');
       if (!wypCartItems.length) { laEl.style.display = 'none'; return; }
-      // Tylko w trybie przeglądania (collapsed) — w koszyku nie pokazuj
-      var step2 = document.getElementById('wypStep2');
-      if (!step2.classList.contains('narz-collapsed')) { laEl.style.display = 'none'; return; }
       var idx = wypCartItems.length - 1;
       var c = wypCartItems[idx];
       var laName = simplifyName(c.nazwaWys) || c.nazwaWys;
