@@ -525,6 +525,16 @@
       color: #991b1b;
     }
 
+    .status-consumed {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-damaged {
+      background: #fce4ec;
+      color: #880e4f;
+    }
+
     .picker-item {
       padding: 20px;
       border-bottom: 1px solid #f1f2f6;
@@ -611,6 +621,96 @@
       background: white;
     }
 
+    /* Dynamic fields panel */
+    .dynamic-fields {
+      background: #eef2f7;
+      border-radius: 15px;
+      padding: 15px;
+      margin: 10px 0;
+    }
+
+    .dynamic-fields label {
+      display: block;
+      font-weight: bold;
+      color: #636e72;
+      font-size: 14px;
+      margin-bottom: 5px;
+      margin-top: 10px;
+    }
+
+    .dynamic-fields label:first-child {
+      margin-top: 0;
+    }
+
+    .dynamic-fields select,
+    .dynamic-fields input[type="number"],
+    .dynamic-fields input[type="file"] {
+      width: 100%;
+      height: 50px;
+      padding: 0 15px;
+      font-size: 16px;
+      border: 2px solid #dfe6e9;
+      border-radius: 12px;
+      background: white;
+      outline: none;
+    }
+
+    .dynamic-fields input[type="file"] {
+      height: auto;
+      padding: 12px;
+    }
+
+    .dynamic-fields .photo-preview {
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .dynamic-fields .photo-preview img {
+      max-width: 100%;
+      max-height: 150px;
+      border-radius: 10px;
+    }
+
+    /* Summary progress bar */
+    .summary-bar-bg {
+      background: #eee;
+      border-radius: 8px;
+      height: 12px;
+      margin: 8px 0;
+      overflow: hidden;
+    }
+
+    .summary-bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.3s;
+    }
+
+    /* Print styles for damage report */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+
+      #modalRaportUszkodzonych,
+      #modalRaportUszkodzonych * {
+        visibility: visible;
+      }
+
+      #modalRaportUszkodzonych .modal-content {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+      }
+
+      #modalRaportUszkodzonych .close-btn,
+      #modalRaportUszkodzonych .no-print {
+        display: none !important;
+      }
+    }
+
     @keyframes slideUp {
       from {
         transform: translateY(100%);
@@ -661,14 +761,14 @@
   <!-- TAB: LOG -->
   <div class="tab-content active" id="tabLog">
     <input type="text" id="searchLog" class="search-input"
-      placeholder="Szukaj w logach (osoba, narzędzie, kod, telefon)">
+      placeholder="Szukaj w logach (osoba, narzędzie, SN)">
     <div style="display:flex;gap:10px;margin-bottom:15px;">
       <button class="filter-btn" onclick="filterLogStatus('all',this)">Wszystkie</button>
       <button class="filter-btn active" onclick="filterLogStatus('active',this)">Aktywne</button>
       <button class="filter-btn" onclick="filterLogStatus('returned',this)">Zwrócone</button>
     </div>
     <div id="logList"></div>
-    <button class="fab" onclick="openWypozyczModal()">➕</button>
+    <button class="fab" onclick="openWypozyczModal()">+</button>
   </div>
 
   <!-- TAB: OSOBY -->
@@ -678,10 +778,17 @@
     <button class="fab" onclick="openAddOsobaModal()">+</button>
   </div>
 
-  <!-- TAB: NARZĘDZIA -->
+  <!-- TAB: NARZĘDZIA / KATALOG -->
   <div class="tab-content" id="tabNarzedzia">
-    <button class="btn btn-primary" onclick="mergeNarzedzia()" style="height:50px;font-size:16px;margin-bottom:15px;">🔄
-      Scal duplikaty</button>
+    <!-- Summary Section -->
+    <div style="display:flex;gap:8px;margin-bottom:15px;">
+      <button class="btn btn-primary" onclick="toggleSummary()"
+        style="flex:1;height:50px;font-size:14px;margin-bottom:0;">Podsumowanie stanu</button>
+      <button class="btn btn-danger" onclick="showRaportUszkodzonych()"
+        style="flex:1;height:50px;font-size:14px;margin-bottom:0;">Raport uszkodzonych</button>
+    </div>
+    <div id="summaryCards" style="display:none;margin-bottom:15px;"></div>
+
     <input type="text" class="search-input" id="searchNarzedzia" placeholder="Szukaj narzędzia...">
     <div id="narzKatFilters" style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;">
       <button class="filter-btn active" onclick="filterNarzKategoria('all',this)">Wszystkie</button>
@@ -691,8 +798,9 @@
       <button class="filter-btn" onclick="filterNarzKategoria('specjalne',this)">Specjalne</button>
     </div>
     <div id="narzedziaList"></div>
-    <button class="fab" onclick="openAddNarzedzieModal()">+</button>
+    <button class="fab" onclick="openAddKatalogModal()">+</button>
   </div>
+
   <!-- MODAL: SZCZEGÓŁY OSOBY -->
   <div class="modal" id="modalOsobaDetail">
     <div class="modal-content">
@@ -702,7 +810,7 @@
       </div>
       <div id="osobaDetailInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
       <button class="whatsapp-btn" id="osobaWhatsStanBtn" onclick="sendWhatsAppStan()"
-        style="display:none;height:50px;font-size:16px;margin-bottom:15px;">💬 Wyślij stan wypożyczeń WhatsApp</button>
+        style="display:none;height:50px;font-size:16px;margin-bottom:15px;">WhatsApp — stan wypożyczeń</button>
       <div style="font-weight:bold;margin-bottom:10px;font-size:18px;">Aktywne wypożyczenia:</div>
       <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..."
         oninput="filterOsobaWyp()" style="height:50px;font-size:16px;margin-bottom:10px;">
@@ -710,8 +818,8 @@
       <div class="return-cart-bar" id="returnCartBar">
         <div style="font-weight:bold;margin-bottom:10px;">Zaznaczono: <span id="returnCartCount">0</span></div>
         <button class="btn btn-danger" id="returnCartBtn" onclick="returnCartSubmit()">Zwróć zaznaczone</button>
-        <button class="whatsapp-btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()" style="display:none;">💬
-          WhatsApp — potwierdzenie zwrotu</button>
+        <button class="whatsapp-btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()" style="display:none;">WhatsApp
+          — potwierdzenie zwrotu</button>
       </div>
     </div>
   </div>
@@ -734,6 +842,36 @@
     </div>
   </div>
 
+  <!-- MODAL: RAPORT USZKODZONYCH -->
+  <div class="modal" id="modalRaportUszkodzonych">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Raport uszkodzonych narzędzi</div>
+        <button class="close-btn" onclick="closeModal('modalRaportUszkodzonych')">&times;</button>
+      </div>
+      <button class="btn btn-primary no-print" onclick="window.print()"
+        style="height:50px;font-size:16px;margin-bottom:15px;">Drukuj raport</button>
+      <div id="raportUszkodzonychContent"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: ZDJĘCIE PRZY ZWROCIE (Specjalne) -->
+  <div class="modal" id="modalReturnPhoto">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Zdjęcie przy zwrocie</div>
+        <button class="close-btn" onclick="closeModal('modalReturnPhoto')">&times;</button>
+      </div>
+      <div id="returnPhotoInfo" style="background:#eef2f7;padding:15px;border-radius:15px;margin-bottom:15px;"></div>
+      <label class="form-label">Zrób zdjęcie narzędzia (WYMAGANE)</label>
+      <input type="file" class="form-input" id="returnPhotoInput"
+        accept="image/*" capture="environment"
+        onchange="previewPhoto(this,'returnPhotoPreview')" style="height:auto;padding:15px;">
+      <div id="returnPhotoPreview" style="margin:10px 0;text-align:center;"></div>
+      <button class="btn btn-success" onclick="submitReturnWithPhoto()">Potwierdź zwrot ze zdjęciem</button>
+    </div>
+  </div>
+
   <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <button class="nav-btn active" data-tab="log" onclick="switchTab('log', this)"><span
@@ -741,7 +879,7 @@
     <button class="nav-btn" data-tab="osoby" onclick="switchTab('osoby', this)"><span
         class="nav-icon">👥</span><span>Osoby</span></button>
     <button class="nav-btn" data-tab="narzedzia" onclick="switchTab('narzedzia', this)"><span
-        class="nav-icon">🔧</span><span>Narzędzia</span></button>
+        class="nav-icon">🔧</span><span>Katalog</span></button>
   </div>
 
   <!-- MODAL: DODAJ OSOBĘ -->
@@ -759,28 +897,32 @@
     </div>
   </div>
 
-  <!-- MODAL: DODAJ NARZĘDZIE -->
-  <div class="modal" id="modalAddNarzedzie">
+  <!-- MODAL: DODAJ DO KATALOGU -->
+  <div class="modal" id="modalAddKatalog">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title">Dodaj narzędzie</div>
-        <button class="close-btn" onclick="closeModal('modalAddNarzedzie')">&times;</button>
+        <div class="modal-title">Dodaj do katalogu</div>
+        <button class="close-btn" onclick="closeModal('modalAddKatalog')">&times;</button>
       </div>
-      <label class="form-label">Kod / QR (opcjonalnie)</label>
-      <input type="text" class="form-input" id="newNarzKod" placeholder="np. NZ001 (auto jeśli pusto)">
-      <label class="form-label">Nazwa narzędzia</label>
-      <input type="text" class="form-input" id="newNarzNazwa" placeholder="np. Wiertarka Bosch">
-      <label class="form-label">Ilość</label>
-      <input type="number" class="form-input" id="newNarzIlosc" value="1" min="1">
       <label class="form-label">Kategoria</label>
-      <select class="form-input" id="newNarzKategoria" style="height:60px;">
+      <select class="form-input" id="newKatKategoria" onchange="onKatKategoriaChange()" style="height:60px;">
         <option value="">— Wybierz kategorię —</option>
         <option value="zuzywalne">Zużywalne</option>
         <option value="stale">Stałe</option>
         <option value="elektronarzedzia">Elektronarzędzia</option>
         <option value="specjalne">Specjalne</option>
       </select>
-      <button class="btn btn-primary" onclick="addNarzedzie()">Dodaj do bazy</button>
+      <label class="form-label">Nazwa systemowa (unikalna)</label>
+      <input type="text" class="form-input" id="newKatNazwaSys" placeholder="np. Miara 5m Yato XY123">
+      <label class="form-label">Nazwa wyświetlana (grupująca)</label>
+      <input type="text" class="form-input" id="newKatNazwaWys" placeholder="np. Miara 5m">
+      <div id="newKatSNSection" style="display:none;">
+        <label class="form-label">Numer seryjny (SN)</label>
+        <input type="text" class="form-input" id="newKatSN" placeholder="np. ABC-12345">
+      </div>
+      <label class="form-label">Stan początkowy (ilość)</label>
+      <input type="number" class="form-input" id="newKatStan" value="1" min="1">
+      <button class="btn btn-primary" onclick="addKatalogItem()">Dodaj do katalogu</button>
     </div>
   </div>
 
@@ -788,7 +930,7 @@
   <div class="modal" id="modalWypozycz">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title">Nowe Wypożyczenie</div>
+        <div class="modal-title">Nowe wydanie</div>
         <button class="close-btn" onclick="closeModal('modalWypozycz')">&times;</button>
       </div>
 
@@ -796,32 +938,40 @@
       <div id="wypStep1">
         <input type="text" class="picker-search" id="wypOsobaSearch" placeholder="Kto pożycza? Szukaj osoby..."
           oninput="filterWypOsoby()">
-        <div id="wypOsobaList" style="max-height: 60vh; overflow-y: auto;"></div>
+        <button class="btn" onclick="wypSkipOsoba()"
+          style="height:50px;font-size:15px;background:#f59e0b;color:white;box-shadow:0 4px 0 #d97706;margin-bottom:15px;">
+          Wydaj bez osoby (zużywalne)
+        </button>
+        <div id="wypOsobaList" style="max-height: 55vh; overflow-y: auto;"></div>
       </div>
 
       <!-- KROK 2: Wybór narzędzi -->
       <div id="wypStep2" style="display:none">
         <div id="wypPersonBar"
           style="background: #eef2f7; padding: 10px 15px; border-radius: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size:15px;">👤 <b id="wypPersonName"></b></span>
+          <span style="font-size:15px;" id="wypPersonName"></span>
           <button onclick="wypChangeOsoba()"
             style="color: #667eea; border:none; background:none; font-weight:bold; font-size:14px; cursor:pointer;">Zmień</button>
         </div>
         <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
           oninput="filterWypNarz()" style="height:50px;font-size:18px;margin-bottom:8px;">
-        <div id="wypCollapsedBar" onclick="wypExpandUI()">🛒 Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
+        <div id="wypCollapsedBar" onclick="wypExpandUI()">Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
         </div>
+
+        <!-- Dynamic fields panel (appears when tool is clicked) -->
+        <div id="wypDynamicFields" style="display:none;"></div>
+
         <div id="wypNarzList"></div>
 
         <div id="wypCartSection">
-          <div style="font-weight: bold; margin: 10px 0 6px; font-size: 16px;">🛒 KOSZYK:</div>
+          <div style="font-weight: bold; margin: 10px 0 6px; font-size: 16px;">KOSZYK:</div>
           <div id="wypCart"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
             <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit(false)"
-              style="flex:1;height:60px;font-size:17px;" disabled>Pożycz</button>
+              style="flex:1;height:60px;font-size:17px;" disabled>Wydaj</button>
             <button class="btn" id="wypWhatsBtn" onclick="wypSubmit(true)"
               style="flex:1;height:60px;font-size:17px;background:#25d366;color:white;box-shadow:0 5px 0 #1da851;display:none;"
-              disabled>💬 WhatsApp</button>
+              disabled>WhatsApp</button>
           </div>
         </div>
       </div>
@@ -833,13 +983,17 @@
        ZMIENNE GLOBALNE
     ========================= */
     var allOsoby = [];
-    var allNarzedzia = [];
+    var allKatalog = [];
+    var allKatalogGrouped = [];
     var allLogEntries = [];
-    var allUszkodzone = [];
+    var summaryData = [];
+
     var wypOsobaId = null;
     var wypOsobaName = '';
     var wypCartItems = [];
-    var damageKod = '', damageNazwa = '';
+    var currentSelectedGroup = null; // currently selected tool group in dynamic fields
+
+    var damageNazwaSys = '', damageSN = '';
 
     /* =========================
        POMOCNICZE
@@ -848,6 +1002,7 @@
     var currentNarzKategoria = 'all';
     var returnCartIds = [];
     var currentDetailOsoba = null;
+    var currentReturnOpId = null;
 
     var KATEGORIE = {
       'zuzywalne': { label: 'Zużywalne', color: '#f59e0b', bg: '#fef3c7' },
@@ -856,29 +1011,23 @@
       'specjalne': { label: 'Specjalne', color: '#ef4444', bg: '#fee2e2' }
     };
 
+    var STATUS_STYLES = {
+      'Wydane': { cls: 'status-borrowed', label: 'WYDANE' },
+      'Zwrocone': { cls: 'status-available', label: 'ZWRÓCONE' },
+      'Zuzyte': { cls: 'status-consumed', label: 'ZUŻYTE' },
+      'Uszkodzone': { cls: 'status-damaged', label: 'USZKODZONE' }
+    };
+
     function getKategoriaBadge(kat) {
       var k = KATEGORIE[kat];
       if (!k) return '';
       return '<span style="background:' + k.bg + ';color:' + k.color + ';padding:3px 8px;border-radius:8px;font-size:12px;font-weight:bold;">' + k.label + '</span>';
     }
 
-    function mergeNarzedzia() {
-      showLoading();
-      google.script.run
-        .withSuccessHandler(function (res) {
-          hideLoading();
-          if (res && res.success) {
-            toast(res.merged > 0 ? 'Scalono ' + res.merged + ' duplikatów' : 'Brak duplikatów', 'success');
-            loadNarzedzia();
-          } else {
-            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
-          }
-        })
-        .withFailureHandler(function (err) {
-          hideLoading();
-          toast('Błąd: ' + err.message, 'error');
-        })
-        .mergeDuplicateNarzedzia();
+    function getStatusBadge(status) {
+      var s = STATUS_STYLES[status];
+      if (!s) return '<span class="status-badge">' + esc(status) + '</span>';
+      return '<span class="status-badge ' + s.cls + '">' + s.label + '</span>';
     }
 
     var currentDetailActive = [];
@@ -895,11 +1044,11 @@
 
       document.getElementById('osobaDetailTitle').textContent = currentDetailOsoba.imie;
       document.getElementById('osobaDetailInfo').innerHTML =
-        '👤 <b>' + esc(currentDetailOsoba.imie) + '</b>' +
-        (currentDetailOsoba.telefon ? '<br>📞 ' + esc(currentDetailOsoba.telefon) : '');
+        '<b>' + esc(currentDetailOsoba.imie) + '</b>' +
+        (currentDetailOsoba.telefon ? '<br>' + esc(currentDetailOsoba.telefon) : '');
 
       currentDetailActive = allLogEntries.filter(function (e) {
-        return e.idOsoby === idOsoby && !e.dataZwrotu;
+        return e.osoba === currentDetailOsoba.imie && e.status === 'Wydane';
       });
 
       var hasPhone = currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
@@ -919,11 +1068,12 @@
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var e = data[i];
-        h += '<div class="cart-item" style="cursor:pointer;" onclick="toggleReturnCart(\'' + esc(e.idWyp) + '\',this)">'
-          + '<input type="checkbox" class="wyp-item-check" data-id="' + esc(e.idWyp) + '"' + (returnCartIds.indexOf(e.idWyp) !== -1 ? ' checked' : '') + '>'
+        h += '<div class="cart-item" style="cursor:pointer;" onclick="toggleReturnCart(\'' + esc(e.idOp) + '\',this)">'
+          + '<input type="checkbox" class="wyp-item-check" data-id="' + esc(e.idOp) + '"' + (returnCartIds.indexOf(e.idOp) !== -1 ? ' checked' : '') + '>'
           + '<div style="flex:1;margin-left:10px;">'
-          + '<b>' + esc(e.nazwa) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
-          + '<br><span style="font-size:13px;color:#636e72;">' + esc(e.kod) + ' | ' + esc(e.dataWyp) + '</span>'
+          + '<b>' + esc(e.nazwaSys) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
+          + (e.sn ? '<br><span style="font-size:13px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
+          + '<br><span style="font-size:13px;color:#636e72;">' + esc(e.dataWydania) + ' ' + getKategoriaBadge(e.kategoria) + '</span>'
           + '</div></div>';
       }
       container.innerHTML = h;
@@ -934,8 +1084,9 @@
     function filterOsobaWyp() {
       var q = document.getElementById('searchOsobaWyp').value;
       if (!q) { renderOsobaWypList(currentDetailActive); return; }
-      renderOsobaWypList(scoredSearch(currentDetailActive, ['nazwa', 'kod'], q));
+      renderOsobaWypList(scoredSearch(currentDetailActive, ['nazwaSys', 'sn'], q));
     }
+
     function buildWhatsAppUrl(phone, message) {
       var clean = phone.replace(/[^0-9]/g, '');
       if (clean.length === 9) clean = '48' + clean;
@@ -945,11 +1096,11 @@
     function sendWhatsAppStan() {
       if (!currentDetailOsoba || !currentDetailOsoba.telefon) return;
       var active = allLogEntries.filter(function (e) {
-        return e.idOsoby === currentDetailOsoba.id && !e.dataZwrotu;
+        return e.osoba === currentDetailOsoba.imie && e.status === 'Wydane';
       });
       if (!active.length) { toast('Brak aktywnych wypożyczeń', 'error'); return; }
       var items = active.map(function (e) {
-        return '- ' + e.nazwa + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + ' (' + e.dataWyp + ')';
+        return '- ' + e.nazwaSys + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + ' (' + e.dataWydania + ')';
       });
       var msg = 'Aktualny stan wypożyczeń (' + currentDetailOsoba.imie + '):\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
       window.open(buildWhatsAppUrl(currentDetailOsoba.telefon, msg), '_blank');
@@ -960,9 +1111,9 @@
       var items = [];
       for (var i = 0; i < returnCartIds.length; i++) {
         for (var j = 0; j < allLogEntries.length; j++) {
-          if (allLogEntries[j].idWyp === returnCartIds[i]) {
+          if (allLogEntries[j].idOp === returnCartIds[i]) {
             var e = allLogEntries[j];
-            items.push('- ' + e.nazwa + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : ''));
+            items.push('- ' + e.nazwaSys + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : ''));
             break;
           }
         }
@@ -980,16 +1131,17 @@
       if (!osoba || !osoba.telefon || !osoba.telefon.trim()) return;
 
       var items = wypCartItems.map(function (c) {
-        return '- ' + c.nazwa + (c.qty > 1 ? ' (x' + c.qty + ')' : '');
+        return '- ' + c.nazwaWys + (c.qty > 1 ? ' (x' + c.qty + ')' : '') + (c.sn ? ' (SN: ' + c.sn + ')' : '');
       });
-      var msg = 'Potwierdzenie wypożyczenia:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+      var msg = 'Potwierdzenie wydania:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
       window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
     }
-    function toggleReturnCart(idWyp, el) {
+
+    function toggleReturnCart(idOp, el) {
       var cb = el.querySelector('.wyp-item-check');
-      var idx = returnCartIds.indexOf(idWyp);
+      var idx = returnCartIds.indexOf(idOp);
       if (idx === -1) {
-        returnCartIds.push(idWyp);
+        returnCartIds.push(idOp);
         cb.checked = true;
       } else {
         returnCartIds.splice(idx, 1);
@@ -1007,6 +1159,55 @@
 
     function returnCartSubmit() {
       if (!returnCartIds.length) return;
+
+      // Check if any are specjalne — collect photos first
+      var specjalneIds = [];
+      for (var i = 0; i < returnCartIds.length; i++) {
+        for (var j = 0; j < allLogEntries.length; j++) {
+          if (allLogEntries[j].idOp === returnCartIds[i] && allLogEntries[j].kategoria === 'specjalne') {
+            specjalneIds.push(returnCartIds[i]);
+            break;
+          }
+        }
+      }
+
+      if (specjalneIds.length > 0) {
+        // Need photos for specjalne items — process sequentially
+        collectReturnPhotos(specjalneIds, 0, {});
+      } else {
+        executeReturnBatch(returnCartIds, {});
+      }
+    }
+
+    var pendingReturnIds = [];
+    var pendingReturnPhotos = {};
+
+    function collectReturnPhotos(specjalneIds, index, photoMap) {
+      if (index >= specjalneIds.length) {
+        executeReturnBatch(returnCartIds, photoMap);
+        return;
+      }
+      var idOp = specjalneIds[index];
+      var entry = null;
+      for (var j = 0; j < allLogEntries.length; j++) {
+        if (allLogEntries[j].idOp === idOp) { entry = allLogEntries[j]; break; }
+      }
+      pendingReturnIds = specjalneIds;
+      pendingReturnPhotos = photoMap;
+
+      document.getElementById('returnPhotoInfo').innerHTML =
+        '<b>' + esc(entry ? entry.nazwaSys : '') + '</b>' +
+        (entry && entry.sn ? '<br>SN: ' + esc(entry.sn) : '') +
+        '<br><span style="font-size:13px;">Zdjęcie ' + (index + 1) + ' z ' + specjalneIds.length + '</span>';
+      document.getElementById('returnPhotoInput').value = '';
+      document.getElementById('returnPhotoPreview').innerHTML = '';
+      currentReturnOpId = idOp;
+      document.getElementById('modalReturnPhoto').setAttribute('data-batch-index', index);
+      document.getElementById('modalReturnPhoto').setAttribute('data-batch-mode', 'true');
+      openModal('modalReturnPhoto');
+    }
+
+    function executeReturnBatch(ids, photoMap) {
       showLoading();
       document.getElementById('returnCartBtn').disabled = true;
 
@@ -1017,7 +1218,7 @@
             toast('Zwrócono ' + res.count + ' pozycji!', 'success');
             closeModal('modalOsobaDetail');
             loadLog();
-            loadNarzedziaBackground();
+            loadKatalogBackground();
           } else {
             toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
             document.getElementById('returnCartBtn').disabled = false;
@@ -1028,7 +1229,7 @@
           toast('Błąd: ' + err.message, 'error');
           document.getElementById('returnCartBtn').disabled = false;
         })
-        .oddajBatch(returnCartIds);
+        .zwrocBatch(ids, photoMap);
     }
 
     function filterLogStatus(status, btn) {
@@ -1043,13 +1244,13 @@
       var filtered = allLogEntries;
 
       if (currentLogFilter === 'active') {
-        filtered = filtered.filter(function (i) { return !i.dataZwrotu; });
+        filtered = filtered.filter(function (i) { return i.status === 'Wydane'; });
       } else if (currentLogFilter === 'returned') {
-        filtered = filtered.filter(function (i) { return !!i.dataZwrotu; });
+        filtered = filtered.filter(function (i) { return i.status === 'Zwrocone'; });
       }
 
       if (q) {
-        filtered = scoredSearch(filtered, ['nazwa', 'kod', 'imie', 'telefon'], q);
+        filtered = scoredSearch(filtered, ['nazwaSys', 'osoba', 'sn', 'kategoria'], q);
       }
       renderLog(filtered);
     }
@@ -1088,7 +1289,7 @@
       var tabEl = document.getElementById(tabId);
       if (tabEl) tabEl.classList.add('active');
 
-      var titles = { log: 'Log wypożyczeń', osoby: 'Osoby', narzedzia: 'Narzędzia' };
+      var titles = { log: 'Log operacji', osoby: 'Osoby', narzedzia: 'Katalog narzędzi' };
       document.getElementById('headerTitle').textContent = titles[tab] || 'Magazyn';
     }
 
@@ -1123,72 +1324,84 @@
       var html = '';
       for (var i = 0; i < data.length; i++) {
         var item = data[i];
-        var isReturned = item.dataZwrotu && item.dataZwrotu.length > 0;
+        var statusInfo = STATUS_STYLES[item.status] || {};
 
         html += '<div class="log-card">';
+
+        // Row 1: Name + Status/Action
         html += '<div class="log-card-row" style="border-top:none;margin-top:0;">';
-        html += '<strong>' + esc(item.nazwa) + (item.ilosc > 1 ? ' (x' + item.ilosc + ')' : '') + '</strong>';
-        if (!isReturned) {
+        html += '<strong>' + esc(item.nazwaSys) + (item.ilosc > 1 ? ' (x' + item.ilosc + ')' : '') + '</strong>';
+
+        if (item.status === 'Wydane') {
           html += '<button class="status-badge status-available return-btn" '
-            + 'onclick="oddaj(this,\'' + esc(item.idWyp) + '\')">ZWRÓĆ</button>';
+            + 'onclick="oddaj(this,\'' + esc(item.idOp) + '\')">ZWRÓĆ</button>';
         } else {
-          html += '<span class="status-badge status-borrowed">ZWRÓCONE</span>';
+          html += getStatusBadge(item.status);
         }
         html += '</div>';
 
+        // Row 2: Person + SN
         html += '<div class="log-card-row">';
-        html += '<span onclick="openOsobaDetail(\'' + esc(item.idOsoby) + '\')" style="cursor:pointer;color:#667eea;font-weight:bold;">👤 ' + esc(item.imie) + '</span>';
-        var hasTel = item.telefon && item.telefon.trim().length > 0;
-        if (hasTel) {
-          html += '<span onclick="window.open(buildWhatsAppUrl(\'' + esc(item.telefon) + '\',\'\'),\'_blank\')" style="color:#25d366;cursor:pointer;font-weight:bold;">📞 ' + esc(item.telefon) + '</span>';
+        if (item.osoba) {
+          html += '<span style="color:#667eea;font-weight:bold;">' + esc(item.osoba) + '</span>';
         }
+        if (item.sn) {
+          html += '<span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(item.sn) + '</span>';
+        }
+        html += getKategoriaBadge(item.kategoria);
         html += '</div>';
+
+        // Row 3: Date + photos
         html += '<div class="log-card-row">';
-        html += '<span style="color:#636e72;">' + esc(item.kod) + ' · 📅 ' + esc(item.dataWyp) + '</span>';
+        html += '<span style="color:#636e72;">' + esc(item.dataWydania) + '</span>';
+        var photoLinks = '';
+        if (item.zdjecieWydanieUrl) {
+          photoLinks += '<a href="' + esc(item.zdjecieWydanieUrl) + '" target="_blank" style="font-size:12px;color:#667eea;text-decoration:none;">Foto wydanie</a> ';
+        }
+        if (item.zdjecieZwrotUrl) {
+          photoLinks += '<a href="' + esc(item.zdjecieZwrotUrl) + '" target="_blank" style="font-size:12px;color:#10b981;text-decoration:none;">Foto zwrot</a>';
+        }
+        if (photoLinks) html += '<span>' + photoLinks + '</span>';
         html += '</div>';
+
         html += '</div>';
       }
 
       container.innerHTML = html;
     }
 
-    function oddaj(btn, id) {
-      btn.textContent = "ODDAJĘ...";
-      btn.disabled = true;
-
-      // Find the log entry before it gets reloaded
+    function oddaj(btn, idOp) {
       var logItem = null;
       for (var i = 0; i < allLogEntries.length; i++) {
-        if (allLogEntries[i].idWyp === id) { logItem = allLogEntries[i]; break; }
+        if (allLogEntries[i].idOp === idOp) { logItem = allLogEntries[i]; break; }
       }
+      if (!logItem) return;
+
+      if (logItem.kategoria === 'specjalne') {
+        // Open return photo modal
+        currentReturnOpId = idOp;
+        document.getElementById('returnPhotoInfo').innerHTML =
+          '<b>' + esc(logItem.nazwaSys) + '</b>' +
+          (logItem.sn ? '<br>SN: ' + esc(logItem.sn) : '');
+        document.getElementById('returnPhotoInput').value = '';
+        document.getElementById('returnPhotoPreview').innerHTML = '';
+        document.getElementById('modalReturnPhoto').setAttribute('data-batch-mode', 'false');
+        openModal('modalReturnPhoto');
+        return;
+      }
+
+      // Direct return (no photo needed)
+      btn.textContent = "ODDAJĘ...";
+      btn.disabled = true;
 
       google.script.run
         .withSuccessHandler(function (res) {
           if (res && res.success) {
             toast("Zwrot zapisany!", "success");
-
-            // Transform button into WhatsApp if person has phone
-            if (logItem && logItem.telefon && logItem.telefon.trim().length > 0) {
-              btn.textContent = '💬 WhatsApp';
-              btn.disabled = false;
-              btn.className = '';
-              btn.style.cssText = 'background:#25d366;color:#fff;border:none;cursor:pointer;font-weight:bold;padding:6px 12px;border-radius:8px;font-size:13px;';
-              btn.setAttribute('onclick', '');
-              btn.onclick = function () {
-                var msg = 'Potwierdzenie zwrotu:\n- ' + logItem.nazwa + (logItem.ilosc > 1 ? ' (x' + logItem.ilosc + ')' : '') + '\n\nDziękujemy!';
-                window.open(buildWhatsAppUrl(logItem.telefon, msg), '_blank');
-                btn.textContent = '✓ Wysłano';
-                btn.disabled = true;
-                btn.style.background = '#b2bec3';
-                setTimeout(function () { loadLog(); }, 1500);
-              };
-            } else {
-              loadLog();
-            }
-
-            loadNarzedziaBackground();
+            loadLog();
+            loadKatalogBackground();
           } else {
-            toast("Błąd zwrotu", "error");
+            toast("Błąd zwrotu: " + (res.error || ''), "error");
             btn.textContent = "ZWRÓĆ";
             btn.disabled = false;
           }
@@ -1198,7 +1411,47 @@
           btn.textContent = "ZWRÓĆ";
           btn.disabled = false;
         })
-        .oddajNarzedzie(id);
+        .zwrocOperacje(idOp, null);
+    }
+
+    function submitReturnWithPhoto() {
+      var fileInput = document.getElementById('returnPhotoInput');
+      if (!fileInput.files || !fileInput.files[0]) {
+        toast('Zdjęcie wymagane przy zwrocie!', 'error');
+        return;
+      }
+
+      var isBatchMode = document.getElementById('modalReturnPhoto').getAttribute('data-batch-mode') === 'true';
+
+      compressImage(fileInput.files[0], 1024, 0.6, function (base64) {
+        if (isBatchMode) {
+          // Batch return — collect photo and move to next
+          var idx = parseInt(document.getElementById('modalReturnPhoto').getAttribute('data-batch-index')) || 0;
+          pendingReturnPhotos[currentReturnOpId] = base64;
+          closeModal('modalReturnPhoto');
+          collectReturnPhotos(pendingReturnIds, idx + 1, pendingReturnPhotos);
+        } else {
+          // Single return
+          showLoading();
+          closeModal('modalReturnPhoto');
+          google.script.run
+            .withSuccessHandler(function (res) {
+              hideLoading();
+              if (res && res.success) {
+                toast("Zwrot zapisany!", "success");
+                loadLog();
+                loadKatalogBackground();
+              } else {
+                toast("Błąd: " + (res.error || ''), "error");
+              }
+            })
+            .withFailureHandler(function (err) {
+              hideLoading();
+              toast("Błąd: " + err.message, "error");
+            })
+            .zwrocOperacje(currentReturnOpId, base64);
+        }
+      });
     }
 
     /* =========================
@@ -1226,7 +1479,7 @@
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var o = data[i];
-        var cnt = counts[o.id] || 0;
+        var cnt = counts[o.imie] || 0;
         h += '<div class="osoba-card" onclick="openOsobaDetail(\'' + esc(o.id) + '\')">'
           + '<div style="display:flex;justify-content:space-between;align-items:center;">'
           + '<div style="font-weight:bold;font-size:18px;">' + esc(o.imie) + '</div>'
@@ -1270,96 +1523,119 @@
     }
 
     /* =========================
-       NARZĘDZIA
+       KATALOG (NARZĘDZIA)
     ========================= */
-    function loadNarzedzia() {
+    function loadKatalog() {
       showLoading();
       google.script.run.withSuccessHandler(function (d) {
-        allNarzedzia = d || [];
+        allKatalog = (d && d.katalog) || [];
+        allKatalogGrouped = (d && d.katalogGrouped) || [];
         applyNarzFilters();
         hideLoading();
       }).withFailureHandler(function () {
         hideLoading();
-        toast("Błąd ładowania narzędzi", "error");
-      }).getNarzedzia();
+        toast("Błąd ładowania katalogu", "error");
+      }).getInitialData();
     }
 
-    function loadNarzedziaBackground() {
+    function loadKatalogBackground() {
       google.script.run.withSuccessHandler(function (d) {
-        allNarzedzia = d || [];
+        allKatalog = (d && d.katalog) || [];
+        allKatalogGrouped = (d && d.katalogGrouped) || [];
         applyNarzFilters();
-      }).getNarzedzia();
+      }).getInitialData();
     }
 
     function renderNarzedzia(data) {
       var container = document.getElementById('narzedziaList');
       if (!data || !data.length) {
-        container.innerHTML = '<div class="empty-msg">Brak narzędzi w bazie</div>';
+        container.innerHTML = '<div class="empty-msg">Brak narzędzi w katalogu</div>';
         return;
       }
-      var dmgCounts = getDamagedCountByTool();
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var n = data[i];
-        var sCls = n.ilosc > 0 ? 'status-available' : 'status-borrowed';
-        var sTxt = n.ilosc > 0 ? 'Dostępne: ' + n.ilosc : 'Brak';
+        var sCls = n.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
+        var sTxt = n.aktualnieNaStanie > 0 ? 'Dostępne: ' + n.aktualnieNaStanie : 'Brak';
         var katBadge = getKategoriaBadge(n.kategoria);
-        var dmg = dmgCounts[n.kod] || 0;
-        var sn = extractSN(n.opis);
         h += '<div class="narz-card">'
           + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:center;gap:8px;">'
           + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap;">'
-          + '<b style="font-size:16px;">' + esc(n.nazwa) + '</b>'
+          + '<b style="font-size:16px;">' + esc(n.nazwaWys) + '</b>'
           + katBadge
-          + (dmg > 0 ? '<span class="status-badge status-borrowed" style="font-size:11px;">⚠ Uszk: ' + dmg + '</span>' : '')
           + '</div>'
           + '<span class="status-badge ' + sCls + '">' + sTxt + '</span>'
           + '</div>'
           + '<div style="font-size:13px;color:#636e72;">'
-          + 'Kod: ' + esc(n.kod) + ' | Stan: ' + n.ilosc + ' ' + esc(n.jednostka)
-          + (sn ? ' | 📋 S/N: ' + esc(sn) : '')
+          + esc(n.nazwaSys)
+          + (n.sn ? ' | SN: ' + esc(n.sn) : '')
+          + ' | Stan: ' + n.aktualnieNaStanie + '/' + n.stanPoczatkowy
           + '</div>'
           + '<div style="margin-top:4px;">'
-          + '<span onclick="openDamageModal(\'' + esc(n.kod) + '\',\'' + esc(n.nazwa) + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">⚠ Zgłoś uszkodzenie</span>'
+          + '<span onclick="openDamageModal(\'' + esc(n.nazwaSys) + '\',\'' + esc(n.sn) + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">Zgłoś uszkodzenie</span>'
           + '</div>'
           + '</div>';
       }
       container.innerHTML = h;
     }
 
-    function openAddNarzedzieModal() {
-      document.getElementById('newNarzKod').value = '';
-      document.getElementById('newNarzNazwa').value = '';
-      document.getElementById('newNarzIlosc').value = '1';
-      document.getElementById('newNarzKategoria').value = '';
-      openModal('modalAddNarzedzie');
+    function openAddKatalogModal() {
+      document.getElementById('newKatKategoria').value = '';
+      document.getElementById('newKatNazwaSys').value = '';
+      document.getElementById('newKatNazwaWys').value = '';
+      document.getElementById('newKatSN').value = '';
+      document.getElementById('newKatStan').value = '1';
+      document.getElementById('newKatSNSection').style.display = 'none';
+      document.getElementById('newKatStan').removeAttribute('readonly');
+      openModal('modalAddKatalog');
     }
 
-    function addNarzedzie() {
-      var kod = document.getElementById('newNarzKod').value.trim();
-      var nazwa = document.getElementById('newNarzNazwa').value.trim();
-      var ilosc = parseInt(document.getElementById('newNarzIlosc').value) || 1;
-      var kategoria = document.getElementById('newNarzKategoria').value;
+    function onKatKategoriaChange() {
+      var kat = document.getElementById('newKatKategoria').value;
+      var snSection = document.getElementById('newKatSNSection');
+      var stanInput = document.getElementById('newKatStan');
 
-      if (!nazwa) { toast("Podaj nazwę narzędzia", "error"); return; }
+      snSection.style.display = (kat === 'elektronarzedzia' || kat === 'specjalne') ? 'block' : 'none';
+
+      if (kat === 'elektronarzedzia' || kat === 'specjalne') {
+        stanInput.value = '1';
+        stanInput.setAttribute('readonly', true);
+      } else {
+        stanInput.removeAttribute('readonly');
+      }
+    }
+
+    function addKatalogItem() {
+      var nazwaSys = document.getElementById('newKatNazwaSys').value.trim();
+      var nazwaWys = document.getElementById('newKatNazwaWys').value.trim();
+      var kategoria = document.getElementById('newKatKategoria').value;
+      var sn = document.getElementById('newKatSN').value.trim();
+      var stan = parseInt(document.getElementById('newKatStan').value) || 1;
+
+      if (!nazwaSys) { toast("Podaj nazwę systemową", "error"); return; }
+      if (!nazwaWys) { toast("Podaj nazwę wyświetlaną", "error"); return; }
+      if (!kategoria) { toast("Wybierz kategorię", "error"); return; }
+      if ((kategoria === 'elektronarzedzia' || kategoria === 'specjalne') && !sn) {
+        toast("SN wymagany dla tej kategorii", "error"); return;
+      }
 
       showLoading();
       google.script.run
         .withSuccessHandler(function (res) {
           hideLoading();
           if (res && res.success) {
-            toast("Narzędzie dodane!", "success");
-            closeModal('modalAddNarzedzie');
-            loadNarzedzia();
+            toast("Dodano do katalogu!", "success");
+            closeModal('modalAddKatalog');
+            loadKatalog();
           } else {
-            toast("Błąd zapisu", "error");
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
           }
         })
         .withFailureHandler(function (err) {
           hideLoading();
           toast("Błąd: " + err.message, "error");
         })
-        .addNarzedzie(kod, nazwa, ilosc, kategoria);
+        .addKatalogItem(nazwaSys, nazwaWys, kategoria, sn, stan);
     }
 
     /* =========================
@@ -1388,14 +1664,14 @@
 
     function applyNarzFilters() {
       var q = document.getElementById('searchNarzedzia').value;
-      var filtered = allNarzedzia;
+      var filtered = allKatalog;
 
       if (currentNarzKategoria !== 'all') {
         filtered = filtered.filter(function (n) { return n.kategoria === currentNarzKategoria; });
       }
 
       if (q) {
-        filtered = scoredSearch(filtered, ['nazwa', 'kod', 'opis', 'kategoria'], q);
+        filtered = scoredSearch(filtered, ['nazwaSys', 'nazwaWys', 'kategoria', 'sn'], q);
       }
       renderNarzedzia(filtered);
     }
@@ -1407,9 +1683,11 @@
       wypOsobaId = null;
       wypOsobaName = '';
       wypCartItems = [];
+      currentSelectedGroup = null;
       document.getElementById('wypOsobaSearch').value = '';
       document.getElementById('wypStep1').style.display = 'block';
       document.getElementById('wypStep2').style.display = 'none';
+      document.getElementById('wypDynamicFields').style.display = 'none';
       renderWypOsobyList(allOsoby);
       openModal('modalWypozycz');
     }
@@ -1424,7 +1702,7 @@
       var h = '';
       for (var i = 0; i < data.length; i++) {
         var o = data[i];
-        var cnt = counts[o.id] || 0;
+        var cnt = counts[o.imie] || 0;
         h += '<div class="picker-item" onclick="wypSelectOsoba(\'' + esc(o.id) + '\',\'' + esc(o.imie) + '\')">'
           + '<div><span style="font-weight:bold;">' + esc(o.imie) + '</span>'
           + (cnt > 0 ? ' <span class="status-badge status-borrowed" style="font-size:11px;">Wypożyczone: ' + cnt + '</span>' : '')
@@ -1441,10 +1719,25 @@
       renderWypOsobyList(scoredSearch(allOsoby, ['imie', 'telefon'], q));
     }
 
+    function wypSkipOsoba() {
+      wypOsobaId = null;
+      wypOsobaName = '';
+      document.getElementById('wypPersonName').innerHTML = '<span style="color:#f59e0b;font-weight:bold;">Bez osoby (zużywalne)</span>';
+      document.getElementById('wypStep1').style.display = 'none';
+      document.getElementById('wypStep2').style.display = 'flex';
+      document.getElementById('wypStep2').classList.remove('narz-collapsed');
+      document.getElementById('wypNarzSearch').value = '';
+      document.getElementById('wypWhatsBtn').style.display = 'none';
+      wypCartItems = [];
+      renderWypNarzList(allKatalogGrouped);
+      renderWypCart();
+      setupNarzScrollCollapse();
+    }
+
     function wypSelectOsoba(id, name) {
       wypOsobaId = id;
       wypOsobaName = name;
-      document.getElementById('wypPersonName').textContent = name;
+      document.getElementById('wypPersonName').innerHTML = '<b>' + esc(name) + '</b>';
       document.getElementById('wypStep1').style.display = 'none';
       document.getElementById('wypStep2').style.display = 'flex';
       document.getElementById('wypStep2').classList.remove('narz-collapsed');
@@ -1457,9 +1750,13 @@
       }
       var hasPhone = osoba && osoba.telefon && osoba.telefon.trim().length > 0;
       document.getElementById('wypWhatsBtn').style.display = hasPhone ? 'block' : 'none';
-      renderWypNarzList(allNarzedzia);
+      document.getElementById('wypDynamicFields').style.display = 'none';
+      renderWypNarzList(allKatalogGrouped);
       renderWypCart();
-      // Scroll collapse listener
+      setupNarzScrollCollapse();
+    }
+
+    function setupNarzScrollCollapse() {
       var narzList = document.getElementById('wypNarzList');
       narzList.onscroll = function () {
         var step2 = document.getElementById('wypStep2');
@@ -1479,6 +1776,7 @@
     function wypChangeOsoba() {
       document.getElementById('wypStep1').style.display = 'block';
       document.getElementById('wypStep2').style.display = 'none';
+      document.getElementById('wypDynamicFields').style.display = 'none';
       wypOsobaId = null;
       wypOsobaName = '';
       wypCartItems = [];
@@ -1492,92 +1790,182 @@
       }
       var h = '';
       for (var i = 0; i < data.length; i++) {
-        var n = data[i];
+        var g = data[i];
+        // Calculate available stock minus cart items
         var inCart = 0;
         for (var c = 0; c < wypCartItems.length; c++) {
-          if (wypCartItems[c].kod === n.kod) { inCart = wypCartItems[c].qty; break; }
+          if (wypCartItems[c].nazwaWys === g.nazwaWys) {
+            inCart += wypCartItems[c].qty;
+          }
         }
-        var available = n.ilosc - inCart;
-        if (available <= 0) continue; // Ukryj niedostępne narzędzia (w tym uszkodzone)
+        var available = g.totalStock - inCart;
+        if (available <= 0) continue;
 
-        h += '<div class="picker-item"'
-          + ' data-kod="' + esc(n.kod) + '" data-max="' + n.ilosc + '" onclick="wypAddToCartByKod(this)"'
-          + '>'
+        h += '<div class="picker-item" onclick="wypSelectTool(\'' + esc(g.nazwaWys) + '\')">'
           + '<div>'
-          + '<div style="font-weight:bold;">' + esc(n.nazwa) + ' ' + getKategoriaBadge(n.kategoria) + '</div>'
-          + '<div style="font-size:13px;color:#636e72;">' + esc(n.kod) + (extractSN(n.opis) ? ' | S/N: ' + esc(extractSN(n.opis)) : '') + '</div>'
+          + '<div style="font-weight:bold;">' + esc(g.nazwaWys) + ' ' + getKategoriaBadge(g.kategoria) + '</div>'
+          + '<div style="font-size:13px;color:#636e72;">' + g.items.length + ' wariant(ów)</div>'
           + '</div>'
           + '<span class="status-badge status-available">'
-          + available + ' ' + esc(n.jednostka)
+          + available + ' szt.'
           + '</span>'
           + '</div>';
       }
       container.innerHTML = h;
     }
 
-    function wypAddToCartByKod(el) {
-      var kod = el.getAttribute('data-kod');
-      var maxQty = parseInt(el.getAttribute('data-max')) || 1;
-      var nazwa = '';
-      for (var i = 0; i < allNarzedzia.length; i++) {
-        if (allNarzedzia[i].kod === kod) { nazwa = allNarzedzia[i].nazwa; break; }
+    function wypSelectTool(nazwaWys) {
+      // Find the group
+      var group = null;
+      for (var i = 0; i < allKatalogGrouped.length; i++) {
+        if (allKatalogGrouped[i].nazwaWys === nazwaWys) { group = allKatalogGrouped[i]; break; }
       }
-      wypAddToCart(kod, nazwa, maxQty);
+      if (!group) return;
+      currentSelectedGroup = group;
+
+      var kat = group.kategoria;
+      var panel = document.getElementById('wypDynamicFields');
+      var html = '<div class="dynamic-fields">';
+      html += '<div style="font-weight:bold;font-size:16px;margin-bottom:10px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</div>';
+
+      if (kat === 'elektronarzedzia' || kat === 'specjalne') {
+        // SN dropdown
+        var availableItems = group.items.filter(function (it) { return it.aktualnieNaStanie > 0 && it.sn; });
+        html += '<label>Wybierz egzemplarz (SN):</label>';
+        html += '<select id="wypSNSelect">';
+        if (availableItems.length === 0) {
+          html += '<option value="">Brak dostępnych</option>';
+        } else {
+          for (var j = 0; j < availableItems.length; j++) {
+            html += '<option value="' + esc(availableItems[j].sn) + '">' + esc(availableItems[j].nazwaSys) + ' (SN: ' + esc(availableItems[j].sn) + ')</option>';
+          }
+        }
+        html += '</select>';
+        html += '<label>Ilość:</label>';
+        html += '<input type="number" id="wypQtyInput" value="1" min="1" max="1" readonly>';
+      } else {
+        // stale / zuzywalne — no SN, quantity input
+        var maxAvailable = group.totalStock;
+        for (var c = 0; c < wypCartItems.length; c++) {
+          if (wypCartItems[c].nazwaWys === nazwaWys) maxAvailable -= wypCartItems[c].qty;
+        }
+        html += '<label>Ilość:</label>';
+        html += '<input type="number" id="wypQtyInput" value="1" min="1" max="' + maxAvailable + '">';
+      }
+
+      if (kat === 'specjalne') {
+        html += '<label>Zdjęcie przy wydaniu (WYMAGANE):</label>';
+        html += '<input type="file" id="wypPhotoInput" accept="image/*" capture="environment" onchange="previewPhoto(this,\'wypPhotoPreview\')">';
+        html += '<div class="photo-preview" id="wypPhotoPreview"></div>';
+      }
+
+      html += '<button class="btn btn-primary" onclick="wypAddToCartFromFields()" style="height:50px;font-size:15px;margin-top:15px;">Dodaj do koszyka</button>';
+      html += '</div>';
+
+      panel.innerHTML = html;
+      panel.style.display = 'block';
+    }
+
+    function wypAddToCartFromFields() {
+      if (!currentSelectedGroup) return;
+      var kat = currentSelectedGroup.kategoria;
+      var nazwaWys = currentSelectedGroup.nazwaWys;
+      var sn = '';
+      var qty = 1;
+      var photoBase64 = null;
+
+      if (kat === 'elektronarzedzia' || kat === 'specjalne') {
+        var snSelect = document.getElementById('wypSNSelect');
+        sn = snSelect ? snSelect.value : '';
+        if (!sn) { toast('Wybierz egzemplarz (SN)', 'error'); return; }
+        qty = 1;
+      } else {
+        qty = parseInt(document.getElementById('wypQtyInput').value) || 1;
+        if (qty < 1) { toast('Podaj ilość', 'error'); return; }
+      }
+
+      if (kat === 'specjalne') {
+        var photoInput = document.getElementById('wypPhotoInput');
+        if (!photoInput || !photoInput.files || !photoInput.files[0]) {
+          toast('Zdjęcie wymagane dla kategorii Specjalne', 'error');
+          return;
+        }
+        // Compress and add to cart
+        compressImage(photoInput.files[0], 1024, 0.6, function (base64) {
+          finishAddToCart(nazwaWys, sn, qty, kat, base64);
+        });
+        return;
+      }
+
+      finishAddToCart(nazwaWys, sn, qty, kat, null);
+    }
+
+    function finishAddToCart(nazwaWys, sn, qty, kategoria, photoBase64) {
+      // Find max available
+      var group = currentSelectedGroup;
+      var maxAvailable = group.totalStock;
+      for (var c = 0; c < wypCartItems.length; c++) {
+        if (wypCartItems[c].nazwaWys === nazwaWys) maxAvailable -= wypCartItems[c].qty;
+      }
+
+      if (qty > maxAvailable) {
+        toast('Nie ma tyle na stanie (max: ' + maxAvailable + ')', 'error');
+        return;
+      }
+
+      // Check if same SN already in cart
+      if (sn) {
+        for (var i = 0; i < wypCartItems.length; i++) {
+          if (wypCartItems[i].sn === sn) {
+            toast('Ten egzemplarz (SN) jest już w koszyku', 'error');
+            return;
+          }
+        }
+      }
+
+      wypCartItems.push({
+        nazwaWys: nazwaWys,
+        sn: sn,
+        qty: qty,
+        max: group.totalStock,
+        kategoria: kategoria,
+        photoBase64: photoBase64
+      });
+
+      document.getElementById('wypDynamicFields').style.display = 'none';
+      currentSelectedGroup = null;
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+      toast('Dodano do koszyka: ' + nazwaWys, 'success');
     }
 
     function filterWypNarz() {
       var q = document.getElementById('wypNarzSearch').value;
-      if (!q) { renderWypNarzList(allNarzedzia); return; }
-      renderWypNarzList(scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis', 'kategoria'], q));
+      if (!q) { renderWypNarzList(allKatalogGrouped); return; }
+      renderWypNarzList(scoredSearch(allKatalogGrouped, ['nazwaWys', 'kategoria'], q));
     }
 
-    function wypAddToCart(kod, nazwa, maxQty) {
-      for (var i = 0; i < wypCartItems.length; i++) {
-        if (wypCartItems[i].kod === kod) {
-          if (wypCartItems[i].qty < maxQty) {
-            wypCartItems[i].qty++;
-          }
-          renderWypCart();
-          renderWypNarzList(getFilteredNarz());
-          return;
-        }
-      }
-      wypCartItems.push({ kod: kod, nazwa: nazwa, qty: 1, max: maxQty });
-      renderWypCart();
-      renderWypNarzList(getFilteredNarz());
-    }
-
-    function getFilteredNarz() {
+    function getFilteredGrouped() {
       var q = document.getElementById('wypNarzSearch').value;
-      if (!q) return allNarzedzia;
-      return scoredSearch(allNarzedzia, ['nazwa', 'kod', 'opis', 'kategoria'], q);
+      if (!q) return allKatalogGrouped;
+      return scoredSearch(allKatalogGrouped, ['nazwaWys', 'kategoria'], q);
     }
 
-    function wypCartChangeQty(kod, delta) {
-      for (var i = 0; i < wypCartItems.length; i++) {
-        if (wypCartItems[i].kod === kod) {
-          wypCartItems[i].qty += delta;
-          if (wypCartItems[i].qty <= 0) {
-            wypCartItems.splice(i, 1);
-          } else if (wypCartItems[i].qty > wypCartItems[i].max) {
-            wypCartItems[i].qty = wypCartItems[i].max;
-          }
-          break;
-        }
+    function wypCartChangeQty(idx, delta) {
+      var item = wypCartItems[idx];
+      if (!item) return;
+      item.qty += delta;
+      if (item.qty <= 0) {
+        wypCartItems.splice(idx, 1);
       }
       renderWypCart();
-      renderWypNarzList(getFilteredNarz());
+      renderWypNarzList(getFilteredGrouped());
     }
 
-    function wypRemoveFromCart(kod) {
-      for (var i = 0; i < wypCartItems.length; i++) {
-        if (wypCartItems[i].kod === kod) {
-          wypCartItems.splice(i, 1);
-          break;
-        }
-      }
+    function wypRemoveFromCart(idx) {
+      wypCartItems.splice(idx, 1);
       renderWypCart();
-      renderWypNarzList(getFilteredNarz());
+      renderWypNarzList(getFilteredGrouped());
     }
 
     function renderWypCart() {
@@ -1599,40 +1987,65 @@
       var h = '';
       for (var i = 0; i < wypCartItems.length; i++) {
         var c = wypCartItems[i];
+        var canChangeQty = (c.kategoria !== 'elektronarzedzia' && c.kategoria !== 'specjalne');
         h += '<div class="cart-item">'
-          + '<div style="flex:1;"><b>' + esc(c.nazwa) + '</b><br><span style="font-size:13px;color:#636e72;">' + esc(c.kod) + '</span></div>'
-          + '<div class="qty-controls">'
-          + '<button class="qty-btn" data-kod="' + esc(c.kod) + '" data-delta="-1" onclick="wypCartChangeQtyBtn(this)">−</button>'
-          + '<span class="qty-val">' + c.qty + '</span>'
-          + '<button class="qty-btn" data-kod="' + esc(c.kod) + '" data-delta="1" onclick="wypCartChangeQtyBtn(this)">+</button>'
-          + '</div>'
-          + '<button class="remove-cart-btn" data-kod="' + esc(c.kod) + '" onclick="wypRemoveFromCartBtn(this)" style="margin-left:10px;">✕</button>'
+          + '<div style="flex:1;">'
+          + '<b>' + esc(c.nazwaWys) + '</b>'
+          + (c.sn ? '<br><span style="font-size:12px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
+          + '<br><span style="font-size:12px;color:#636e72;">' + getKategoriaBadge(c.kategoria) + '</span>'
+          + (c.photoBase64 ? '<br><span style="font-size:11px;color:#10b981;">Zdjęcie OK</span>' : '')
+          + '</div>';
+
+        if (canChangeQty) {
+          h += '<div class="qty-controls">'
+            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',-1)">−</button>'
+            + '<span class="qty-val">' + c.qty + '</span>'
+            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',1)">+</button>'
+            + '</div>';
+        } else {
+          h += '<span class="qty-val">1</span>';
+        }
+
+        h += '<button class="remove-cart-btn" onclick="wypRemoveFromCart(' + i + ')" style="margin-left:10px;">✕</button>'
           + '</div>';
       }
       container.innerHTML = h;
     }
-    function wypCartChangeQtyBtn(el) {
-      var kod = el.getAttribute('data-kod');
-      var delta = parseInt(el.getAttribute('data-delta'));
-      wypCartChangeQty(kod, delta);
-    }
 
-    function wypRemoveFromCartBtn(el) {
-      var kod = el.getAttribute('data-kod');
-      wypRemoveFromCart(kod);
-    }
     function wypSubmit(sendWhatsApp) {
-      if (!wypOsobaId || !wypCartItems.length) {
-        toast("Wybierz osobę i dodaj narzędzia", "error");
+      if (!wypCartItems.length) {
+        toast("Dodaj narzędzia do koszyka", "error");
         return;
       }
 
+      // Validation
+      for (var i = 0; i < wypCartItems.length; i++) {
+        var item = wypCartItems[i];
+        if (item.kategoria !== 'zuzywalne' && !wypOsobaId) {
+          toast("Osoba wymagana dla: " + item.nazwaWys + " (nie-zużywalne)", "error");
+          return;
+        }
+        if ((item.kategoria === 'elektronarzedzia' || item.kategoria === 'specjalne') && !item.sn) {
+          toast("SN wymagany dla: " + item.nazwaWys, "error");
+          return;
+        }
+        if (item.kategoria === 'specjalne' && !item.photoBase64) {
+          toast("Zdjęcie wymagane dla: " + item.nazwaWys, "error");
+          return;
+        }
+      }
+
       var items = wypCartItems.map(function (c) {
-        return { kod: c.kod, qty: c.qty };
+        return {
+          nazwaWys: c.nazwaWys,
+          sn: c.sn || '',
+          qty: c.qty,
+          kategoria: c.kategoria,
+          photoBase64: c.photoBase64 || null
+        };
       });
 
       var savedCart = wypCartItems.slice();
-      var savedOsobaId = wypOsobaId;
 
       showLoading();
       document.getElementById('wypSubmitBtn').disabled = true;
@@ -1643,24 +2056,18 @@
         .withSuccessHandler(function (res) {
           hideLoading();
           if (res && res.success) {
-            toast("Wypożyczenie zapisane!", "success");
+            var msg = "Wydanie zapisane!";
+            if (res.warnings && res.warnings.length) {
+              msg += ' Uwagi: ' + res.warnings.join(', ');
+            }
+            toast(msg, "success");
             if (sendWhatsApp) {
-              var osoba = null;
-              for (var i = 0; i < allOsoby.length; i++) {
-                if (allOsoby[i].id === savedOsobaId) { osoba = allOsoby[i]; break; }
-              }
-              if (osoba && osoba.telefon && osoba.telefon.trim()) {
-                var cartItems = savedCart.map(function (c) {
-                  return '- ' + c.nazwa + (c.qty > 1 ? ' (x' + c.qty + ')' : '');
-                });
-                var msg = 'Potwierdzenie wypożyczenia:\n' + cartItems.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
-                window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
-              }
+              sendWhatsAppWyp();
             }
             closeModal('modalWypozycz');
             wypCartItems = [];
             loadLog();
-            loadNarzedziaBackground();
+            loadKatalogBackground();
           } else {
             toast("Błąd: " + (res.error || 'Nieznany'), "error");
             document.getElementById('wypSubmitBtn').disabled = false;
@@ -1673,8 +2080,187 @@
           document.getElementById('wypSubmitBtn').disabled = false;
           if (whatsBtn) whatsBtn.disabled = false;
         })
-        .wypozyczBatch(wypOsobaId, items);
+        .wydajBatch(wypOsobaId, items);
     }
+
+    /* =========================
+       ZDJĘCIA — KOMPRESJA
+    ========================= */
+    function compressImage(file, maxWidth, quality, callback) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          var ratio = Math.min(maxWidth / img.width, 1);
+          canvas.width = img.width * ratio;
+          canvas.height = img.height * ratio;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', quality || 0.6);
+          var base64 = dataUrl.split(',')[1];
+          callback(base64);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function previewPhoto(inputEl, containerId) {
+      var container = document.getElementById(containerId);
+      if (!inputEl.files || !inputEl.files[0]) {
+        container.innerHTML = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        container.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;">';
+      };
+      reader.readAsDataURL(inputEl.files[0]);
+    }
+
+    /* =========================
+       USZKODZENIA
+    ========================= */
+    function openDamageModal(nazwaSys, sn) {
+      damageNazwaSys = nazwaSys;
+      damageSN = sn || '';
+      document.getElementById('damageNarzInfo').innerHTML = '<b>' + esc(nazwaSys) + '</b>' + (sn ? ' (SN: ' + esc(sn) + ')' : '');
+      document.getElementById('damageOpis').value = '';
+      document.getElementById('damageIlosc').value = '1';
+      openModal('modalDamage');
+    }
+
+    function submitDamage() {
+      var opis = document.getElementById('damageOpis').value.trim();
+      var ilosc = parseInt(document.getElementById('damageIlosc').value) || 1;
+      if (!opis) { toast("Opisz uszkodzenie", "error"); return; }
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast("Uszkodzenie zgłoszone!", "success");
+            closeModal('modalDamage');
+            loadKatalog();
+            loadLog();
+          } else {
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd: " + err.message, "error");
+        })
+        .zglosUszkodzenie(damageNazwaSys, damageSN, opis, ilosc);
+    }
+
+    /* =========================
+       PODSUMOWANIE STANU
+    ========================= */
+    function toggleSummary() {
+      var section = document.getElementById('summaryCards');
+      if (section.style.display === 'none') {
+        section.style.display = 'block';
+        showLoading();
+        google.script.run.withSuccessHandler(function (data) {
+          hideLoading();
+          summaryData = data || [];
+          renderSummaryCards(summaryData);
+        }).withFailureHandler(function () {
+          hideLoading();
+          toast('Błąd ładowania podsumowania', 'error');
+        }).getSummaryData();
+      } else {
+        section.style.display = 'none';
+      }
+    }
+
+    function renderSummaryCards(data) {
+      var container = document.getElementById('summaryCards');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak danych w katalogu</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < data.length; i++) {
+        var s = data[i];
+        var percent = s.stanPoczatkowy > 0
+          ? Math.round((s.aktualnieNaStanie / s.stanPoczatkowy) * 100)
+          : 0;
+        var barColor = percent > 50 ? '#10b981' : (percent > 20 ? '#f59e0b' : '#ef4444');
+
+        html += '<div class="narz-card" style="margin-bottom:10px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        html += '<b>' + esc(s.nazwaWys) + '</b>';
+        html += getKategoriaBadge(s.kategoria);
+        html += '</div>';
+
+        html += '<div class="summary-bar-bg">';
+        html += '<div class="summary-bar-fill" style="background:' + barColor + ';width:' + percent + '%;"></div>';
+        html += '</div>';
+
+        html += '<div style="display:flex;justify-content:space-between;font-size:13px;color:#636e72;flex-wrap:wrap;gap:4px;">';
+        html += '<span>Na stanie: <b>' + s.aktualnieNaStanie + '</b> / ' + s.stanPoczatkowy + '</span>';
+        if (s.wydane > 0) html += '<span>Wydane: ' + s.wydane + '</span>';
+        if (s.zuzyte > 0) html += '<span>Zużyte: ' + s.zuzyte + '</span>';
+        html += '</div>';
+        html += '</div>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    /* =========================
+       RAPORT USZKODZONYCH
+    ========================= */
+    function showRaportUszkodzonych() {
+      showLoading();
+      google.script.run.withSuccessHandler(function (data) {
+        hideLoading();
+        renderRaportUszkodzonych(data || []);
+        openModal('modalRaportUszkodzonych');
+      }).withFailureHandler(function () {
+        hideLoading();
+        toast('Błąd ładowania raportu', 'error');
+      }).getRaportUszkodzonych();
+    }
+
+    function renderRaportUszkodzonych(data) {
+      var container = document.getElementById('raportUszkodzonychContent');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak zgłoszonych uszkodzeń</div>';
+        return;
+      }
+
+      var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
+      html += '<thead><tr style="background:#fee2e2;text-align:left;">';
+      html += '<th style="padding:10px;border:1px solid #ddd;">Nazwa</th>';
+      html += '<th style="padding:10px;border:1px solid #ddd;">SN</th>';
+      html += '<th style="padding:10px;border:1px solid #ddd;">Opis</th>';
+      html += '<th style="padding:10px;border:1px solid #ddd;">Data</th>';
+      html += '<th style="padding:10px;border:1px solid #ddd;">Ilość</th>';
+      html += '</tr></thead><tbody>';
+
+      for (var i = 0; i < data.length; i++) {
+        var r = data[i];
+        html += '<tr>';
+        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.nazwaSys) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.sn) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.opisUszkodzenia) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.data) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #ddd;">' + r.ilosc + '</td>';
+        html += '</tr>';
+      }
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    /* =========================
+       SCORING SEARCH (bez zmian)
+    ========================= */
     function normalize(str) {
       if (!str) return '';
       return String(str).toLowerCase()
@@ -1683,9 +2269,6 @@
         .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z');
     }
 
-    /* =========================
-       SŁOWNIK SYNONIMÓW
-    ========================= */
     var SYNONYMS = {
       'mlotek': ['mlot', 'mloteczek', 'mlotek'],
       'mlot': ['mlotek', 'mloteczek', 'mlot'],
@@ -1713,9 +2296,6 @@
       return result;
     }
 
-    /* =========================
-       SCORING (zastępuje fuzzyMatch)
-    ========================= */
     function levenshtein(a, b) {
       var m = a.length, n = b.length;
       if (m === 0) return n;
@@ -1735,15 +2315,11 @@
 
     function scoreWord(text, word) {
       var t = normalize(text);
-      var w = word; // already normalized
+      var w = word;
       if (!t || !w) return 0;
-      // exact match
       if (t === w) return 1.0;
-      // prefix
       if (t.indexOf(w) === 0) return 0.9;
-      // substring
       if (t.indexOf(w) !== -1) return 0.85;
-      // levenshtein on individual words of text
       var tWords = t.split(/\s+/);
       var bestLev = Infinity;
       for (var i = 0; i < tWords.length; i++) {
@@ -1751,9 +2327,8 @@
         if (d < bestLev) bestLev = d;
       }
       if (bestLev <= 2) {
-        return 0.6 + (2 - bestLev) * 0.075; // 0: 0.75, 1: 0.675, 2: 0.6
+        return 0.6 + (2 - bestLev) * 0.075;
       }
-      // sequential character matching (old fuzzy)
       var ti = 0, matched = 0;
       for (var qi = 0; qi < w.length; qi++) {
         while (ti < t.length) {
@@ -1780,12 +2355,11 @@
           if (!fieldVal) continue;
           for (var ei = 0; ei < expanded.length; ei++) {
             var s = scoreWord(fieldVal, expanded[ei]);
-            // synonym penalty: 10% reduction if not original word
             if (ei > 0 && s > 0) s *= 0.9;
             if (s > bestScore) bestScore = s;
           }
         }
-        if (bestScore === 0) return 0; // AND logic
+        if (bestScore === 0) return 0;
         wordScores.push(bestScore);
       }
       if (!wordScores.length) return 0;
@@ -1810,74 +2384,17 @@
     }
 
     /* =========================
-       LICZNIK AKTYWNYCH WYPOŻYCZEŃ
+       LICZNIK AKTYWNYCH
     ========================= */
     function getActiveCountByPerson() {
       var counts = {};
       for (var i = 0; i < allLogEntries.length; i++) {
         var e = allLogEntries[i];
-        if (!e.dataZwrotu) {
-          counts[e.idOsoby] = (counts[e.idOsoby] || 0) + 1;
+        if (e.status === 'Wydane' && e.osoba) {
+          counts[e.osoba] = (counts[e.osoba] || 0) + 1;
         }
       }
       return counts;
-    }
-
-    /* =========================
-       USZKODZONE
-    ========================= */
-    function getDamagedCountByTool() {
-      var counts = {};
-      for (var i = 0; i < allUszkodzone.length; i++) {
-        var kod = allUszkodzone[i].kodNarzedzia;
-        counts[kod] = (counts[kod] || 0) + (allUszkodzone[i].ilosc || 1);
-      }
-      return counts;
-    }
-
-    function extractSN(opis) {
-      if (!opis) return null;
-      var match = opis.match(/(?:s\/n|sn|serial|nr\.?\s*(?:ser\.?)?)[:\s]+([a-zA-Z0-9\-\/\.]+)/i);
-      return match ? match[1] : null;
-    }
-
-    function openDamageModal(kod, nazwa) {
-      damageKod = kod;
-      damageNazwa = nazwa;
-      document.getElementById('damageNarzInfo').innerHTML = '🔧 <b>' + esc(nazwa) + '</b> (' + esc(kod) + ')';
-      document.getElementById('damageOpis').value = '';
-      document.getElementById('damageIlosc').value = '1';
-      openModal('modalDamage');
-    }
-
-    function submitDamage() {
-      var opis = document.getElementById('damageOpis').value.trim();
-      var ilosc = parseInt(document.getElementById('damageIlosc').value) || 1;
-      if (!opis) { toast("Opisz uszkodzenie", "error"); return; }
-      showLoading();
-      google.script.run
-        .withSuccessHandler(function (res) {
-          hideLoading();
-          if (res && res.success) {
-            toast("Uszkodzenie zgłoszone!", "success");
-            closeModal('modalDamage');
-            loadUszkodzone();
-          } else {
-            toast("Błąd: " + (res.error || 'Nieznany'), "error");
-          }
-        })
-        .withFailureHandler(function (err) {
-          hideLoading();
-          toast("Błąd: " + err.message, "error");
-        })
-        .addUszkodzone(damageKod, damageNazwa, opis, ilosc);
-    }
-
-    function loadUszkodzone() {
-      google.script.run.withSuccessHandler(function (d) {
-        allUszkodzone = d || [];
-        applyNarzFilters();
-      }).getUszkodzone();
     }
 
     /* =========================
@@ -1888,8 +2405,8 @@
       google.script.run
         .withSuccessHandler(function (data) {
           allOsoby = (data && data.osoby) || [];
-          allNarzedzia = (data && data.narzedzia) || [];
-          allUszkodzone = (data && data.uszkodzone) || [];
+          allKatalog = (data && data.katalog) || [];
+          allKatalogGrouped = (data && data.katalogGrouped) || [];
           renderOsoby(allOsoby);
           applyNarzFilters();
           hideLoading();
@@ -1900,7 +2417,6 @@
           toast("Błąd ładowania danych", "error");
           loadLog();
           loadOsoby();
-          loadNarzedzia();
         })
         .getInitialData();
     }

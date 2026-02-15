@@ -1,22 +1,39 @@
 // ============================================
-// MAGAZYN / WYPOŻYCZALNIA - BACKEND v2.3 FIXED
+// MAGAZYN / WYPOŻYCZALNIA - BACKEND v3.0
+// Nowy model: Katalog + Przesunięcia
 // ============================================
 
 const CACHE_TTL = 60 * 5;
 const SPREADSHEET_ID = '1OCm_8VZ1Q-z1sXGsthJKUgHS_H13rdXa9uzGKdNrc6A';
 
-const SHEET_NARZEDZIA = "Narzędzia";
+const SHEET_KATALOG = "Katalog";
 const SHEET_OSOBY = "Osoby";
-const SHEET_WYPOZYCZENIA = "Wypożyczenia";
-const SHEET_USZKODZONE = "Uszkodzone";
+const SHEET_PRZESUNIECIA = "Przesunięcia";
+const DRIVE_FOLDER_NAME = "Magazyn_Zdjecia";
 
-const COLS_NARZ = {
-  KOD: 0,
-  NAZWA: 1,
-  OPIS: 2,
-  ILOSC: 3,
-  JEDNOSTKA: 4,
-  KATEGORIA: 5
+const COLS_KATALOG = {
+  ID: 0,
+  NAZWA_SYSTEMOWA: 1,
+  NAZWA_WYSWIETLANA: 2,
+  KATEGORIA: 3,
+  SN: 4,
+  STAN_POCZATKOWY: 5,
+  AKTUALNIE_NA_STANIE: 6
+};
+
+const COLS_PRZES = {
+  ID_OPERACJI: 0,
+  DATA_WYDANIA: 1,
+  OSOBA: 2,
+  NAZWA_SYSTEMOWA: 3,
+  SN: 4,
+  ILOSC: 5,
+  KATEGORIA: 6,
+  STATUS: 7,
+  ZDJECIE_WYDANIE_URL: 8,
+  ZDJECIE_ZWROT_URL: 9,
+  DATA_ZWROTU: 10,
+  OPIS_USZKODZENIA: 11
 };
 
 // ============================================
@@ -31,7 +48,7 @@ function doGet() {
 }
 
 function getSheet(name) {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(name);
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(name);
   if (!sheet) throw new Error('Brak arkusza: ' + name);
   return sheet;
 }
@@ -40,7 +57,6 @@ function generateId(prefix) {
   return prefix + Date.now() + Math.random().toString(36).substr(2, 5);
 }
 
-// Bezpieczne formatowanie daty do stringa
 function formatDate(d) {
   if (!d) return '';
   try {
@@ -58,53 +74,14 @@ function formatDate(d) {
 }
 
 // ============================================
-// LOG
-// ============================================
-
-function getLog() {
-  var sheet = getSheet(SHEET_WYPOZYCZENIA);
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-
-  var data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
-
-  return data.map(function (r) {
-    return {
-      idWyp: String(r[0]),
-      kod: String(r[1] || ''),
-      nazwa: String(r[2] || ''),
-      opis: String(r[3] || ''),
-      idOsoby: String(r[4] || ''),
-      imie: String(r[5] || ''),
-      telefon: String(r[6] || ''),
-      dataWyp: formatDate(r[7]),
-      dataZwrotu: formatDate(r[8]),
-      ilosc: Number(r[9]) || 1
-    };
-  }).sort(function (a, b) {
-    var aDate = a.dataZwrotu || a.dataWyp || '';
-    var bDate = b.dataZwrotu || b.dataWyp || '';
-    return bDate.localeCompare(aDate);
-  });
-}
-
-function getInitialData() {
-  return {
-    osoby: getOsoby(),
-    narzedzia: getNarzedzia(),
-    uszkodzone: getUszkodzone()
-  };
-}
-
-// ============================================
-// OSOBY
+// OSOBY (bez zmian)
 // ============================================
 
 function getOsoby() {
   var cache = CacheService.getScriptCache();
   var cached = cache.get("osoby");
   if (cached) {
-    try { return JSON.parse(cached); } catch (e) { /* ignore */ }
+    try { return JSON.parse(cached); } catch (e) { }
   }
 
   var sheet = getSheet(SHEET_OSOBY);
@@ -125,7 +102,7 @@ function getOsoby() {
 
   try {
     cache.put("osoby", JSON.stringify(osoby), CACHE_TTL);
-  } catch (e) { /* za duże - pomijamy cache */ }
+  } catch (e) { }
   return osoby;
 }
 
@@ -138,104 +115,276 @@ function addOsoba(imie, telefon) {
 }
 
 // ============================================
-// NARZĘDZIA
+// KATALOG
 // ============================================
 
-function getNarzedzia() {
+function getKatalog() {
   var cache = CacheService.getScriptCache();
-  var cached = cache.get("narzedzia");
+  var cached = cache.get("katalog");
   if (cached) {
     try { return JSON.parse(cached); } catch (e) { }
   }
 
-  var sheet = getSheet(SHEET_NARZEDZIA);
+  var sheet = getSheet(SHEET_KATALOG);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
 
-  var narzedzia = data.map(function (r) {
+  var katalog = data.map(function (r) {
     return {
-      kod: String(r[COLS_NARZ.KOD]),
-      nazwa: String(r[COLS_NARZ.NAZWA]),
-      opis: String(r[COLS_NARZ.OPIS] || ''),
-      ilosc: Number(r[COLS_NARZ.ILOSC]) || 0,
-      jednostka: String(r[COLS_NARZ.JEDNOSTKA] || 'szt.'),
-      kategoria: String(r[COLS_NARZ.KATEGORIA] || '')
+      id: String(r[COLS_KATALOG.ID]),
+      nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''),
+      nazwaWys: String(r[COLS_KATALOG.NAZWA_WYSWIETLANA] || ''),
+      kategoria: String(r[COLS_KATALOG.KATEGORIA] || ''),
+      sn: String(r[COLS_KATALOG.SN] || ''),
+      stanPoczatkowy: Number(r[COLS_KATALOG.STAN_POCZATKOWY]) || 0,
+      aktualnieNaStanie: Number(r[COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0
     };
   }).sort(function (a, b) {
-    return a.nazwa.localeCompare(b.nazwa);
+    return a.nazwaWys.localeCompare(b.nazwaWys);
   });
 
   try {
-    cache.put("narzedzia", JSON.stringify(narzedzia), CACHE_TTL);
+    cache.put("katalog", JSON.stringify(katalog), CACHE_TTL);
   } catch (e) { }
-  return narzedzia;
+  return katalog;
 }
 
-function addNarzedzie(kod, nazwa, ilosc, kategoria) {
-  var sheet = getSheet(SHEET_NARZEDZIA);
-  var finalKod = kod && kod.trim() ? kod.trim() : generateId('NZ');
-  sheet.appendRow([finalKod, nazwa.trim(), '', Number(ilosc) || 1, 'szt.', kategoria || '']);
-  CacheService.getScriptCache().remove("narzedzia");
-  return { success: true, kod: finalKod };
+function getKatalogGrouped() {
+  var katalog = getKatalog();
+  var groups = {};
+
+  for (var i = 0; i < katalog.length; i++) {
+    var k = katalog[i];
+    var key = k.nazwaWys;
+    if (!groups[key]) {
+      groups[key] = {
+        nazwaWys: k.nazwaWys,
+        kategoria: k.kategoria,
+        totalStock: 0,
+        totalPoczatkowy: 0,
+        items: []
+      };
+    }
+    groups[key].totalStock += k.aktualnieNaStanie;
+    groups[key].totalPoczatkowy += k.stanPoczatkowy;
+    groups[key].items.push({
+      id: k.id,
+      nazwaSys: k.nazwaSys,
+      sn: k.sn,
+      aktualnieNaStanie: k.aktualnieNaStanie
+    });
+  }
+
+  var result = [];
+  for (var key in groups) {
+    result.push(groups[key]);
+  }
+  return result.sort(function (a, b) {
+    return a.nazwaWys.localeCompare(b.nazwaWys);
+  });
+}
+
+function addKatalogItem(nazwaSys, nazwaWys, kategoria, sn, stanPoczatkowy) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_KATALOG);
+    var id = generateId('KT');
+    var qty = Number(stanPoczatkowy) || 1;
+    sheet.appendRow([id, nazwaSys.trim(), nazwaWys.trim(), kategoria, sn || '', qty, qty]);
+    CacheService.getScriptCache().remove("katalog");
+    return { success: true, id: id };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
+}
+
+function getAvailableSNs(nazwaWys) {
+  var katalog = getKatalog();
+  var result = [];
+  for (var i = 0; i < katalog.length; i++) {
+    var k = katalog[i];
+    if (k.nazwaWys === nazwaWys && k.aktualnieNaStanie > 0 && k.sn) {
+      result.push({
+        nazwaSys: k.nazwaSys,
+        sn: k.sn,
+        aktualnieNaStanie: k.aktualnieNaStanie
+      });
+    }
+  }
+  return result;
 }
 
 // ============================================
-// WYPOŻYCZANIE (BEZ KONFLIKTÓW)
+// ALIAS RESOLUTION
 // ============================================
 
-function wypozyczBatch(idOsoby, items) {
+function resolveAvailableItem(nazwaWys, preferredSN) {
+  var sheet = getSheet(SHEET_KATALOG);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  var fallback = null;
+
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (String(r[COLS_KATALOG.NAZWA_WYSWIETLANA]) !== nazwaWys) continue;
+    var stock = Number(r[COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0;
+    if (stock <= 0) continue;
+
+    var item = {
+      rowIndex: i + 2,
+      id: String(r[COLS_KATALOG.ID]),
+      nazwaSys: String(r[COLS_KATALOG.NAZWA_SYSTEMOWA]),
+      nazwaWys: String(r[COLS_KATALOG.NAZWA_WYSWIETLANA]),
+      kategoria: String(r[COLS_KATALOG.KATEGORIA]),
+      sn: String(r[COLS_KATALOG.SN] || ''),
+      aktualnieNaStanie: stock
+    };
+
+    if (preferredSN && item.sn === preferredSN) {
+      return item;
+    }
+    if (!fallback) {
+      fallback = item;
+    }
+  }
+
+  return fallback;
+}
+
+// ============================================
+// ZDJĘCIA - GOOGLE DRIVE
+// ============================================
+
+function getOrCreateFolder(parent, name) {
+  var folders = parent.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return parent.createFolder(name);
+}
+
+function savePhotoToDrive(base64Data, subfolder, operationId) {
+  if (!base64Data) return '';
+
+  try {
+    var rootFolders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
+    var root = rootFolders.hasNext() ? rootFolders.next() : DriveApp.createFolder(DRIVE_FOLDER_NAME);
+
+    var sub = getOrCreateFolder(root, subfolder);
+
+    var blob = Utilities.newBlob(
+      Utilities.base64Decode(base64Data),
+      'image/jpeg',
+      operationId + '_' + Date.now() + '.jpg'
+    );
+
+    var file = sub.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return file.getUrl();
+  } catch (e) {
+    Logger.log('Photo save error: ' + e.toString());
+    return '';
+  }
+}
+
+// ============================================
+// WYDANIE (WYPOŻYCZENIE / ZUŻYCIE)
+// ============================================
+
+function wydajBatch(idOsoby, items) {
   var lock = LockService.getScriptLock();
 
   try {
     lock.waitLock(30000);
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var narzSheet = ss.getSheetByName(SHEET_NARZEDZIA);
-    var wypSheet = ss.getSheetByName(SHEET_WYPOZYCZENIA);
-    var osoby = getOsoby();
+    var katSheet = ss.getSheetByName(SHEET_KATALOG);
+    var przesSheet = ss.getSheetByName(SHEET_PRZESUNIECIA);
 
-    var osoba = null;
-    for (var o = 0; o < osoby.length; o++) {
-      if (osoby[o].id === idOsoby) { osoba = osoby[o]; break; }
-    }
-    if (!osoba) return { success: false, error: 'Nie znaleziono osoby' };
-
-    var narzData = narzSheet.getDataRange().getValues();
-
-    for (var idx = 0; idx < items.length; idx++) {
-      var item = items[idx];
-      var kod = item.kod;
-      var qty = Number(item.qty) || 1;
-
-      for (var i = 1; i < narzData.length; i++) {
-        if (String(narzData[i][COLS_NARZ.KOD]) === kod) {
-          var stan = Number(narzData[i][COLS_NARZ.ILOSC]) || 0;
-          if (stan < qty) continue;
-
-          narzSheet.getRange(i + 1, COLS_NARZ.ILOSC + 1).setValue(stan - qty);
-          narzData[i][COLS_NARZ.ILOSC] = stan - qty;
-
-          wypSheet.appendRow([
-            generateId('W'),              // A: idWyp
-            kod,                          // B: kod
-            narzData[i][COLS_NARZ.NAZWA], // C: nazwa
-            narzData[i][COLS_NARZ.OPIS],  // D: opis
-            idOsoby,                      // E: idOsoby
-            osoba.imie,                   // F: imie
-            osoba.telefon,                // G: telefon
-            new Date(),                   // H: dataWyp
-            "",                           // I: dataZwrotu
-            qty                           // J: ilosc
-          ]);
-
-          break;
-        }
+    var osobaImie = '';
+    if (idOsoby) {
+      var osoby = getOsoby();
+      for (var o = 0; o < osoby.length; o++) {
+        if (osoby[o].id === idOsoby) { osobaImie = osoby[o].imie; break; }
       }
     }
 
-    CacheService.getScriptCache().remove("narzedzia");
+    var katData = katSheet.getDataRange().getValues();
+    var errors = [];
+
+    for (var idx = 0; idx < items.length; idx++) {
+      var item = items[idx];
+      var qty = Number(item.qty) || 1;
+      var resolved = null;
+
+      // Find the matching Katalog row
+      for (var i = 1; i < katData.length; i++) {
+        var r = katData[i];
+        if (String(r[COLS_KATALOG.NAZWA_WYSWIETLANA]) !== item.nazwaWys) continue;
+        var stock = Number(r[COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0;
+        if (stock < qty) continue;
+
+        if (item.sn) {
+          if (String(r[COLS_KATALOG.SN]) === item.sn) {
+            resolved = { row: i, data: r, stock: stock };
+            break;
+          }
+        } else {
+          resolved = { row: i, data: r, stock: stock };
+          break;
+        }
+      }
+
+      if (!resolved) {
+        errors.push('Brak dostępnego: ' + item.nazwaWys);
+        continue;
+      }
+
+      // Decrement stock
+      var newStock = resolved.stock - qty;
+      katSheet.getRange(resolved.row + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(newStock);
+      katData[resolved.row][COLS_KATALOG.AKTUALNIE_NA_STANIE] = newStock;
+
+      // Determine status
+      var status = (item.kategoria === 'zuzywalne') ? 'Zuzyte' : 'Wydane';
+
+      // Handle photo for specjalne
+      var photoUrl = '';
+      if (item.kategoria === 'specjalne' && item.photoBase64) {
+        var opId = generateId('OP');
+        photoUrl = savePhotoToDrive(item.photoBase64, 'Wydania', opId);
+      }
+
+      var opId2 = photoUrl ? opId : generateId('OP');
+
+      // Append to Przesunięcia
+      przesSheet.appendRow([
+        opId2,                                               // ID_Operacji
+        new Date(),                                          // Data_Wydania
+        osobaImie,                                           // Osoba
+        String(resolved.data[COLS_KATALOG.NAZWA_SYSTEMOWA]), // Nazwa_Systemowa
+        String(resolved.data[COLS_KATALOG.SN] || ''),        // SN
+        qty,                                                 // Ilosc
+        item.kategoria,                                      // Kategoria
+        status,                                              // Status
+        photoUrl,                                            // Zdjecie_Wydanie_URL
+        '',                                                  // Zdjecie_Zwrot_URL
+        '',                                                  // Data_Zwrotu
+        ''                                                   // Opis_Uszkodzenia
+      ]);
+    }
+
+    CacheService.getScriptCache().remove("katalog");
+
+    if (errors.length > 0) {
+      return { success: true, warnings: errors };
+    }
     return { success: true };
 
   } catch (e) {
@@ -249,58 +398,93 @@ function wypozyczBatch(idOsoby, items) {
 // ZWROT
 // ============================================
 
-function oddajNarzedzie(idWyp) {
+function zwrocOperacje(idOperacji, photoBase64) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
-    var sheet = getSheet(SHEET_WYPOZYCZENIA);
-    var data = sheet.getDataRange().getValues();
 
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(idWyp)) {
-        if (data[i][8] && String(data[i][8]).length > 0) {
-          return { success: false, error: 'Już zwrócone' };
-        }
-        sheet.getRange(i + 1, 9).setValue(new Date());   // kolumna I (dataZwrotu)
-        var kod = data[i][1];
-        var ilosc = Number(data[i][9]) || 1;              // kolumna J (ilosc)
-        zwiekszStanNarzedzia(kod, ilosc);
-        CacheService.getScriptCache().remove("narzedzia");
-        return { success: true };
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var przesSheet = ss.getSheetByName(SHEET_PRZESUNIECIA);
+    var katSheet = ss.getSheetByName(SHEET_KATALOG);
+    var przesData = przesSheet.getDataRange().getValues();
+
+    for (var i = 1; i < przesData.length; i++) {
+      if (String(przesData[i][COLS_PRZES.ID_OPERACJI]) !== String(idOperacji)) continue;
+
+      var status = String(przesData[i][COLS_PRZES.STATUS]);
+      if (status !== 'Wydane') {
+        return { success: false, error: 'Nie można zwrócić — status: ' + status };
       }
+
+      var kategoria = String(przesData[i][COLS_PRZES.KATEGORIA]);
+
+      // Handle photo for specjalne
+      if (kategoria === 'specjalne' && photoBase64) {
+        var photoUrl = savePhotoToDrive(photoBase64, 'Zwroty', idOperacji);
+        przesSheet.getRange(i + 1, COLS_PRZES.ZDJECIE_ZWROT_URL + 1).setValue(photoUrl);
+      }
+
+      // Update status and return date
+      przesSheet.getRange(i + 1, COLS_PRZES.STATUS + 1).setValue('Zwrocone');
+      przesSheet.getRange(i + 1, COLS_PRZES.DATA_ZWROTU + 1).setValue(new Date());
+
+      // Increment stock in Katalog
+      var nazwaSys = String(przesData[i][COLS_PRZES.NAZWA_SYSTEMOWA]);
+      var ilosc = Number(przesData[i][COLS_PRZES.ILOSC]) || 1;
+      incrementStock(katSheet, nazwaSys, ilosc);
+
+      CacheService.getScriptCache().remove("katalog");
+      return { success: true };
     }
-    return { success: false, error: 'Nie znaleziono wypożyczenia' };
+
+    return { success: false, error: 'Nie znaleziono operacji' };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
     try { lock.releaseLock(); } catch (e) { }
   }
 }
-function oddajBatch(ids) {
+
+function zwrocBatch(ids, photoDataMap) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
-    var sheet = getSheet(SHEET_WYPOZYCZENIA);
-    var data = sheet.getDataRange().getValues();
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var przesSheet = ss.getSheetByName(SHEET_PRZESUNIECIA);
+    var katSheet = ss.getSheetByName(SHEET_KATALOG);
+    var przesData = przesSheet.getDataRange().getValues();
     var count = 0;
+    var photoMap = photoDataMap || {};
 
     for (var idx = 0; idx < ids.length; idx++) {
-      var idWyp = String(ids[idx]);
-      for (var i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === idWyp) {
-          if (data[i][8] && String(data[i][8]).length > 0) continue;
-          sheet.getRange(i + 1, 9).setValue(new Date());
-          var kod = data[i][1];
-          var ilosc = Number(data[i][9]) || 1;
-          zwiekszStanNarzedzia(kod, ilosc);
-          data[i][8] = new Date();
-          count++;
-          break;
+      var idOp = String(ids[idx]);
+      for (var i = 1; i < przesData.length; i++) {
+        if (String(przesData[i][COLS_PRZES.ID_OPERACJI]) !== idOp) continue;
+        if (String(przesData[i][COLS_PRZES.STATUS]) !== 'Wydane') continue;
+
+        var kategoria = String(przesData[i][COLS_PRZES.KATEGORIA]);
+
+        // Handle photo for specjalne
+        if (kategoria === 'specjalne' && photoMap[idOp]) {
+          var photoUrl = savePhotoToDrive(photoMap[idOp], 'Zwroty', idOp);
+          przesSheet.getRange(i + 1, COLS_PRZES.ZDJECIE_ZWROT_URL + 1).setValue(photoUrl);
         }
+
+        przesSheet.getRange(i + 1, COLS_PRZES.STATUS + 1).setValue('Zwrocone');
+        przesSheet.getRange(i + 1, COLS_PRZES.DATA_ZWROTU + 1).setValue(new Date());
+
+        var nazwaSys = String(przesData[i][COLS_PRZES.NAZWA_SYSTEMOWA]);
+        var ilosc = Number(przesData[i][COLS_PRZES.ILOSC]) || 1;
+        incrementStock(katSheet, nazwaSys, ilosc);
+
+        przesData[i][COLS_PRZES.STATUS] = 'Zwrocone';
+        count++;
+        break;
       }
     }
 
-    CacheService.getScriptCache().remove("narzedzia");
+    CacheService.getScriptCache().remove("katalog");
     return { success: true, count: count };
   } catch (e) {
     return { success: false, error: e.toString() };
@@ -308,189 +492,236 @@ function oddajBatch(ids) {
     try { lock.releaseLock(); } catch (e) { }
   }
 }
-function mergeDuplicateNarzedzia() {
+
+function incrementStock(katSheet, nazwaSys, qty) {
+  var data = katSheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][COLS_KATALOG.NAZWA_SYSTEMOWA]) === nazwaSys) {
+      var stan = Number(data[i][COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0;
+      katSheet.getRange(i + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(stan + qty);
+      break;
+    }
+  }
+}
+
+function decrementStock(katSheet, nazwaSys, qty) {
+  var data = katSheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][COLS_KATALOG.NAZWA_SYSTEMOWA]) === nazwaSys) {
+      var stan = Number(data[i][COLS_KATALOG.AKTUALNIE_NA_STANIE]) || 0;
+      katSheet.getRange(i + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(Math.max(0, stan - qty));
+      break;
+    }
+  }
+}
+
+// ============================================
+// USZKODZENIA
+// ============================================
+
+function zglosUszkodzenie(nazwaSys, sn, opis, ilosc) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
-    var sheet = getSheet(SHEET_NARZEDZIA);
-    var data = sheet.getDataRange().getValues();
-    if (data.length < 2) return { success: true, merged: 0 };
 
-    var map = {};
-    var mergedRows = [];
-    var toDelete = [];
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var przesSheet = ss.getSheetByName(SHEET_PRZESUNIECIA);
+    var katSheet = ss.getSheetByName(SHEET_KATALOG);
 
-    for (var i = 1; i < data.length; i++) {
-      var kod = String(data[i][COLS_NARZ.KOD]).trim();
-      var nazwa = String(data[i][COLS_NARZ.NAZWA]).trim();
-      var key = kod ? kod.toLowerCase() : nazwa.toLowerCase();
+    var qty = Number(ilosc) || 1;
+    var opId = generateId('OP');
 
-      if (map[key] !== undefined) {
-        var targetIdx = map[key];
-        mergedRows[targetIdx].ilosc += Number(data[i][COLS_NARZ.ILOSC]) || 0;
-        if (!mergedRows[targetIdx].opis && data[i][COLS_NARZ.OPIS]) {
-          mergedRows[targetIdx].opis = String(data[i][COLS_NARZ.OPIS]);
-        }
-        if (!mergedRows[targetIdx].kategoria && data[i][COLS_NARZ.KATEGORIA]) {
-          mergedRows[targetIdx].kategoria = String(data[i][COLS_NARZ.KATEGORIA]);
-        }
-        toDelete.push(i + 1); // numer wiersza (1-based)
-      } else {
-        map[key] = i;
-        mergedRows[i] = {
-          row: i + 1,
-          ilosc: Number(data[i][COLS_NARZ.ILOSC]) || 0,
-          opis: String(data[i][COLS_NARZ.OPIS] || ''),
-          kategoria: String(data[i][COLS_NARZ.KATEGORIA] || '')
-        };
-      }
-    }
+    przesSheet.appendRow([
+      opId,         // ID_Operacji
+      new Date(),   // Data_Wydania
+      '',           // Osoba
+      nazwaSys,     // Nazwa_Systemowa
+      sn || '',     // SN
+      qty,          // Ilosc
+      '',           // Kategoria
+      'Uszkodzone', // Status
+      '',           // Zdjecie_Wydanie_URL
+      '',           // Zdjecie_Zwrot_URL
+      '',           // Data_Zwrotu
+      opis || ''    // Opis_Uszkodzenia
+    ]);
 
-    // Aktualizuj ilości w wierszach docelowych
-    for (var idx in mergedRows) {
-      if (!mergedRows[idx]) continue;
-      var m = mergedRows[idx];
-      sheet.getRange(m.row, COLS_NARZ.ILOSC + 1).setValue(m.ilosc);
-      if (m.opis) {
-        sheet.getRange(m.row, COLS_NARZ.OPIS + 1).setValue(m.opis);
-      }
-      if (m.kategoria) {
-        sheet.getRange(m.row, COLS_NARZ.KATEGORIA + 1).setValue(m.kategoria);
-      }
-    }
+    decrementStock(katSheet, nazwaSys, qty);
 
-    // Usuń duplikaty od dołu żeby nie przesuwać indeksów
-    toDelete.sort(function (a, b) { return b - a; });
-    for (var d = 0; d < toDelete.length; d++) {
-      sheet.deleteRow(toDelete[d]);
-    }
-
-    CacheService.getScriptCache().remove("narzedzia");
-    return { success: true, merged: toDelete.length };
+    CacheService.getScriptCache().remove("katalog");
+    return { success: true, id: opId };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
     try { lock.releaseLock(); } catch (e) { }
   }
 }
-function onEditMergeNarzedzia(e) {
-  try {
-    var sheet = e.source.getActiveSheet();
-    if (sheet.getName() !== SHEET_NARZEDZIA) return;
-    mergeDuplicateNarzedzia();
-  } catch (err) { }
-}
-function setupMergeTrigger() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  // Usuń stare triggery tej funkcji
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'onEditMergeNarzedzia') {
-      ScriptApp.deleteTrigger(t);
-    }
-  });
-  // Nowy trigger
-  ScriptApp.newTrigger('onEditMergeNarzedzia')
-    .forSpreadsheet(ss)
-    .onEdit()
-    .create();
-}
-function zwiekszStanNarzedzia(kod, ilosc) {
-  var sheet = getSheet(SHEET_NARZEDZIA);
-  var data = sheet.getDataRange().getValues();
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][COLS_NARZ.KOD]) === String(kod)) {
-      var stan = Number(data[i][COLS_NARZ.ILOSC]) || 0;
-      sheet.getRange(i + 1, COLS_NARZ.ILOSC + 1).setValue(stan + ilosc);
-      break;
-    }
-  }
-  CacheService.getScriptCache().remove("narzedzia");
-}
 
 // ============================================
-// USZKODZONE
+// LOG (PRZESUNIĘCIA)
 // ============================================
 
-function getUszkodzone() {
-  var cache = CacheService.getScriptCache();
-  var cached = cache.get("uszkodzone");
-  if (cached) {
-    try { return JSON.parse(cached); } catch (e) { }
-  }
-
-  var sheet = getSheet(SHEET_USZKODZONE);
+function getLog() {
+  var sheet = getSheet(SHEET_PRZESUNIECIA);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  var data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
 
-  var uszkodzone = data.map(function (r) {
+  return data.map(function (r) {
     return {
-      id: String(r[0]),
-      kodNarzedzia: String(r[1] || ''),
-      nazwaNarzedzia: String(r[2] || ''),
-      opisUszkodzenia: String(r[3] || ''),
-      data: formatDate(r[4]),
-      ilosc: Number(r[5]) || 1
+      idOp: String(r[COLS_PRZES.ID_OPERACJI]),
+      dataWydania: formatDate(r[COLS_PRZES.DATA_WYDANIA]),
+      osoba: String(r[COLS_PRZES.OSOBA] || ''),
+      nazwaSys: String(r[COLS_PRZES.NAZWA_SYSTEMOWA] || ''),
+      sn: String(r[COLS_PRZES.SN] || ''),
+      ilosc: Number(r[COLS_PRZES.ILOSC]) || 1,
+      kategoria: String(r[COLS_PRZES.KATEGORIA] || ''),
+      status: String(r[COLS_PRZES.STATUS] || ''),
+      zdjecieWydanieUrl: String(r[COLS_PRZES.ZDJECIE_WYDANIE_URL] || ''),
+      zdjecieZwrotUrl: String(r[COLS_PRZES.ZDJECIE_ZWROT_URL] || ''),
+      dataZwrotu: formatDate(r[COLS_PRZES.DATA_ZWROTU]),
+      opisUszkodzenia: String(r[COLS_PRZES.OPIS_USZKODZENIA] || '')
     };
+  }).sort(function (a, b) {
+    var aDate = a.dataZwrotu || a.dataWydania || '';
+    var bDate = b.dataZwrotu || b.dataWydania || '';
+    return bDate.localeCompare(aDate);
   });
-
-  try {
-    cache.put("uszkodzone", JSON.stringify(uszkodzone), CACHE_TTL);
-  } catch (e) { }
-  return uszkodzone;
 }
 
-function addUszkodzone(kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, ilosc) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000);
-    var sheet = getSheet(SHEET_USZKODZONE);
-    var id = generateId('USZ');
-    var qty = Number(ilosc) || 1;
-    sheet.appendRow([id, kodNarzedzia, nazwaNarzedzia, opisUszkodzenia, new Date(), qty]);
+// ============================================
+// RAPORTY
+// ============================================
 
-    // Automatycznie oddaj uszkodzone — zmniejsz stan w magazynie
-    zmniejszStanNarzedzia(kodNarzedzia, qty);
+function getSummaryData() {
+  var katalog = getKatalog();
+  var przesSheet = getSheet(SHEET_PRZESUNIECIA);
+  var lastRow = przesSheet.getLastRow();
+  var przesData = lastRow >= 2 ? przesSheet.getRange(2, 1, lastRow - 1, 12).getValues() : [];
 
-    // Automatycznie zwróć aktywne wypożyczenia tego narzędzia (do ilości uszkodzonych)
-    autoReturnDamaged(kodNarzedzia, qty);
-
-    CacheService.getScriptCache().remove("uszkodzone");
-    CacheService.getScriptCache().remove("narzedzia");
-    return { success: true, id: id };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  } finally {
-    try { lock.releaseLock(); } catch (e) { }
+  // Build map: nazwaSys -> nazwaWys
+  var sysToWys = {};
+  var groups = {};
+  for (var i = 0; i < katalog.length; i++) {
+    var k = katalog[i];
+    sysToWys[k.nazwaSys] = k.nazwaWys;
+    if (!groups[k.nazwaWys]) {
+      groups[k.nazwaWys] = {
+        nazwaWys: k.nazwaWys,
+        kategoria: k.kategoria,
+        stanPoczatkowy: 0,
+        aktualnieNaStanie: 0,
+        wydane: 0,
+        zuzyte: 0
+      };
+    }
+    groups[k.nazwaWys].stanPoczatkowy += k.stanPoczatkowy;
+    groups[k.nazwaWys].aktualnieNaStanie += k.aktualnieNaStanie;
   }
-}
 
-function zmniejszStanNarzedzia(kod, ilosc) {
-  var sheet = getSheet(SHEET_NARZEDZIA);
-  var data = sheet.getDataRange().getValues();
+  // Count active operations
+  for (var j = 0; j < przesData.length; j++) {
+    var row = przesData[j];
+    var nazwaSys = String(row[COLS_PRZES.NAZWA_SYSTEMOWA]);
+    var status = String(row[COLS_PRZES.STATUS]);
+    var qty = Number(row[COLS_PRZES.ILOSC]) || 1;
 
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][COLS_NARZ.KOD]) === String(kod)) {
-      var stan = Number(data[i][COLS_NARZ.ILOSC]) || 0;
-      sheet.getRange(i + 1, COLS_NARZ.ILOSC + 1).setValue(Math.max(0, stan - ilosc));
-      break;
+    var grupKey = sysToWys[nazwaSys];
+    if (grupKey && groups[grupKey]) {
+      if (status === 'Wydane') groups[grupKey].wydane += qty;
+      if (status === 'Zuzyte') groups[grupKey].zuzyte += qty;
     }
   }
-  CacheService.getScriptCache().remove("narzedzia");
+
+  var result = [];
+  for (var key in groups) {
+    result.push(groups[key]);
+  }
+  return result.sort(function (a, b) { return a.nazwaWys.localeCompare(b.nazwaWys); });
 }
 
-function autoReturnDamaged(kod, maxQty) {
-  var sheet = getSheet(SHEET_WYPOZYCZENIA);
-  var data = sheet.getDataRange().getValues();
-  var returned = 0;
+function getRaportUszkodzonych() {
+  var sheet = getSheet(SHEET_PRZESUNIECIA);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
 
-  for (var i = 1; i < data.length && returned < maxQty; i++) {
-    if (String(data[i][1]) === String(kod) && (!data[i][8] || String(data[i][8]).length === 0)) {
-      sheet.getRange(i + 1, 9).setValue(new Date());
-      var ilosc = Number(data[i][9]) || 1;
-      returned += ilosc;
-    }
+  var data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+  var result = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (String(r[COLS_PRZES.STATUS]) !== 'Uszkodzone') continue;
+    result.push({
+      nazwaSys: String(r[COLS_PRZES.NAZWA_SYSTEMOWA] || ''),
+      sn: String(r[COLS_PRZES.SN] || ''),
+      opisUszkodzenia: String(r[COLS_PRZES.OPIS_USZKODZENIA] || ''),
+      data: formatDate(r[COLS_PRZES.DATA_WYDANIA]),
+      ilosc: Number(r[COLS_PRZES.ILOSC]) || 1
+    });
   }
+
+  return result.sort(function (a, b) {
+    return (b.data || '').localeCompare(a.data || '');
+  });
+}
+
+// ============================================
+// INITIAL DATA
+// ============================================
+
+function getInitialData() {
+  return {
+    osoby: getOsoby(),
+    katalog: getKatalog(),
+    katalogGrouped: getKatalogGrouped()
+  };
+}
+
+// ============================================
+// MIGRACJA (jednorazowa)
+// ============================================
+
+function migrateWypozyczenia() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var wypSheet = ss.getSheetByName("Wypożyczenia");
+  if (!wypSheet) return { success: false, error: 'Brak arkusza Wypożyczenia' };
+
+  var przesSheet = ss.getSheetByName(SHEET_PRZESUNIECIA);
+  if (!przesSheet) return { success: false, error: 'Brak arkusza Przesunięcia' };
+
+  var lastRow = wypSheet.getLastRow();
+  if (lastRow < 2) return { success: true, migrated: 0 };
+
+  var data = wypSheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var count = 0;
+
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    var idWyp = String(r[0]);
+    var nazwa = String(r[2] || '');
+    var imie = String(r[5] || '');
+    var dataWyp = r[7];
+    var dataZwr = r[8];
+    var ilosc = Number(r[9]) || 1;
+    var hasReturn = dataZwr && String(dataZwr).length > 0;
+
+    przesSheet.appendRow([
+      idWyp,                          // ID_Operacji (zachowujemy stare ID)
+      dataWyp || '',                  // Data_Wydania
+      imie,                           // Osoba
+      nazwa,                          // Nazwa_Systemowa
+      '',                             // SN
+      ilosc,                          // Ilosc
+      '',                             // Kategoria
+      hasReturn ? 'Zwrocone' : 'Wydane', // Status
+      '',                             // Zdjecie_Wydanie_URL
+      '',                             // Zdjecie_Zwrot_URL
+      hasReturn ? dataZwr : '',       // Data_Zwrotu
+      ''                              // Opis_Uszkodzenia
+    ]);
+    count++;
+  }
+
+  return { success: true, migrated: count };
 }
