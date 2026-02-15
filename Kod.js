@@ -836,6 +836,7 @@ function getRaportUszkodzonych() {
     var r = data[i];
     if (String(r[COLS_PRZES.STATUS]) !== 'Uszkodzone') continue;
     result.push({
+      idOp: String(r[COLS_PRZES.ID_OPERACJI]),
       nazwaSys: String(r[COLS_PRZES.NAZWA_SYSTEMOWA] || ''),
       sn: String(r[COLS_PRZES.SN] || ''),
       opisUszkodzenia: String(r[COLS_PRZES.OPIS_USZKODZENIA] || ''),
@@ -847,6 +848,29 @@ function getRaportUszkodzonych() {
   return result.sort(function (a, b) {
     return (b.data || '').localeCompare(a.data || '');
   });
+}
+
+function edytujOpisUszkodzenia(idOp, nowyOpis) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_PRZESUNIECIA);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Brak danych' };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === idOp) {
+        sheet.getRange(i + 2, COLS_PRZES.OPIS_USZKODZENIA + 1).setValue(nowyOpis);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Nie znaleziono operacji' };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
 }
 
 // ============================================

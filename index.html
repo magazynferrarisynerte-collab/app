@@ -74,7 +74,7 @@
     }
 
     #wypNarzList {
-      max-height: 420px;
+      max-height: 520px;
       overflow-y: auto;
       background: #fff;
       border-radius: 15px;
@@ -803,7 +803,7 @@
   <div class="tab-content" id="tabNarzedzia">
     <!-- Summary Section -->
     <div style="display:flex;gap:8px;margin-bottom:15px;">
-      <button class="btn btn-primary" onclick="toggleSummary()"
+      <button class="btn btn-primary" onclick="toggleSummary()" id="btnToggleSummary"
         style="flex:1;height:50px;font-size:14px;margin-bottom:0;">Podsumowanie stanu</button>
       <button class="btn btn-danger" onclick="showRaportUszkodzonych()"
         style="flex:1;height:50px;font-size:14px;margin-bottom:0;">Raport uszkodzonych</button>
@@ -980,7 +980,8 @@
       <label class="form-label">Stan początkowy (ilość)</label>
       <input type="number" class="form-input" id="newKatStan" value="1" min="1">
       <button class="btn btn-primary" onclick="addKatalogItem()">Dodaj do katalogu</button>
-      <div id="lastAddedItem" style="display:none;margin-top:15px;background:#eef2f7;padding:12px 15px;border-radius:12px;"></div>
+      <div id="lastAddedItem"
+        style="display:none;margin-top:15px;background:#eef2f7;padding:12px 15px;border-radius:12px;"></div>
     </div>
   </div>
 
@@ -994,7 +995,8 @@
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
           <input type="text" class="picker-search" id="wypOsobaSearch" placeholder="Kto pożycza? Szukaj osoby..."
             oninput="filterWypOsoby()" style="flex:1;margin-bottom:0;">
-          <button class="close-btn" onclick="closeModal('modalWypozycz')" style="position:static;font-size:28px;">&times;</button>
+          <button class="close-btn" onclick="closeModal('modalWypozycz')"
+            style="position:static;font-size:28px;">&times;</button>
         </div>
         <button class="btn" onclick="wypSkipOsoba()"
           style="height:50px;font-size:15px;background:#f59e0b;color:white;box-shadow:0 4px 0 #d97706;margin-bottom:15px;">
@@ -1014,7 +1016,8 @@
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
           <input type="text" class="picker-search" id="wypNarzSearch" placeholder="Szukaj narzędzia..."
             oninput="filterWypNarz()" style="flex:1;height:50px;font-size:18px;margin-bottom:0;">
-          <button class="close-btn" onclick="closeModal('modalWypozycz')" style="position:static;font-size:28px;">&times;</button>
+          <button class="close-btn" onclick="closeModal('modalWypozycz')"
+            style="position:static;font-size:28px;">&times;</button>
         </div>
         <div id="wypCollapsedBar" onclick="wypExpandUI()">Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
         </div>
@@ -1091,6 +1094,19 @@
     }
 
     var currentDetailActive = [];
+
+    function goToOsoba(imie) {
+      // Znajdź osobę po imieniu i otwórz jej detal
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].imie === imie) {
+          // Przełącz na zakładkę Osoby
+          var btn = document.querySelectorAll('.nav-btn')[1];
+          switchTab('tabOsoby', btn);
+          openOsobaDetail(allOsoby[i].id);
+          return;
+        }
+      }
+    }
 
     function openOsobaDetail(idOsoby) {
       returnCartIds = [];
@@ -1357,8 +1373,8 @@
       });
     }
 
-    var BRANDS = ['STANLEY','MAKITA','BOSCH','YATO','DEWALT','MILWAUKEE','HILTI','METABO','FESTOOL','STIHL','HUSQVARNA','KARCHER','RYOBI','EINHELL','PARKSIDE','GRAPHITE','DEDRA','TOPEX','VOREL','STHOR','NEO','PROLINE','HOGERT','BAHCO','KNIPEX','WIHA','WERA','IRWIN','TAJIMA','STABILA','WURTH','FISCHER','RAWLPLUG','WOLFCRAFT','HIKOKI','HITACHI','KRESS','FLEX','FEIN','AEG','RIDGID','RUBI','BERNER','ERBAUER','TITAN','TOTAL','INGCO','TOYA','EXTOL','KLINGSPOR'];
-    var COLORS_PL = ['ZOLTA','ŻÓŁTA','ZÓŁTA','CZARNA','CZERWONA','ZIELONA','NIEBIESKA','BIALA','BIAŁA','SZARA','POMARANCZOWA','FIOLETOWA','BRAZOWA','BRĄZOWA','SREBRNA','ZLOTA','ZŁOTA'];
+    var BRANDS = ['STANLEY', 'MAKITA', 'BOSCH', 'YATO', 'DEWALT', 'MILWAUKEE', 'HILTI', 'METABO', 'FESTOOL', 'STIHL', 'HUSQVARNA', 'KARCHER', 'RYOBI', 'EINHELL', 'PARKSIDE', 'GRAPHITE', 'DEDRA', 'TOPEX', 'VOREL', 'STHOR', 'NEO', 'PROLINE', 'HOGERT', 'BAHCO', 'KNIPEX', 'WIHA', 'WERA', 'IRWIN', 'TAJIMA', 'STABILA', 'WURTH', 'FISCHER', 'RAWLPLUG', 'WOLFCRAFT', 'HIKOKI', 'HITACHI', 'KRESS', 'FLEX', 'FEIN', 'AEG', 'RIDGID', 'RUBI', 'BERNER', 'ERBAUER', 'TITAN', 'TOTAL', 'INGCO', 'TOYA', 'EXTOL', 'KLINGSPOR'];
+    var COLORS_PL = ['ZOLTA', 'ŻÓŁTA', 'ZÓŁTA', 'CZARNA', 'CZERWONA', 'ZIELONA', 'NIEBIESKA', 'BIALA', 'BIAŁA', 'SZARA', 'POMARANCZOWA', 'FIOLETOWA', 'BRAZOWA', 'BRĄZOWA', 'SREBRNA', 'ZLOTA', 'ZŁOTA'];
 
     function simplifyName(fullName) {
       if (!fullName) return '';
@@ -1473,23 +1489,19 @@
         }
         html += '</div>';
 
-        // Row 2: Person + Kategoria
+        // Row 2: Person (clickable) + date + kategoria
         html += '<div class="log-card-row">';
         if (item.osoba) {
-          html += '<span style="color:#667eea;font-weight:bold;">' + esc(item.osoba) + '</span>';
+          html += '<span onclick="goToOsoba(\'' + esc(item.osoba) + '\')" style="color:#667eea;font-weight:bold;cursor:pointer;">' + esc(item.osoba) + '</span>';
         }
+        html += '<span style="color:#636e72;font-size:12px;">' + esc(item.dataWydania) + '</span>';
         html += getKategoriaBadge(item.kategoria);
-        html += '</div>';
-
-        // Row 3: Date + photos
-        html += '<div class="log-card-row">';
-        html += '<span style="color:#636e72;">' + esc(item.dataWydania) + '</span>';
         var photoLinks = '';
         if (item.zdjecieWydanieUrl) {
-          photoLinks += '<a href="' + esc(item.zdjecieWydanieUrl) + '" target="_blank" style="font-size:12px;color:#667eea;text-decoration:none;">Foto wydanie</a> ';
+          photoLinks += '<a href="' + esc(item.zdjecieWydanieUrl) + '" target="_blank" style="font-size:12px;color:#667eea;text-decoration:none;">Foto wyd.</a> ';
         }
         if (item.zdjecieZwrotUrl) {
-          photoLinks += '<a href="' + esc(item.zdjecieZwrotUrl) + '" target="_blank" style="font-size:12px;color:#10b981;text-decoration:none;">Foto zwrot</a>';
+          photoLinks += '<a href="' + esc(item.zdjecieZwrotUrl) + '" target="_blank" style="font-size:12px;color:#10b981;text-decoration:none;">Foto zwr.</a>';
         }
         if (photoLinks) html += '<span>' + photoLinks + '</span>';
         html += '</div>';
@@ -2241,16 +2253,7 @@
       toast('Dodano do koszyka: ' + nazwaWys, 'success');
 
       // Pokaż ostatnio dodaną pozycję pod listą narzędzi
-      var laEl = document.getElementById('wypLastAdded');
-      var laName = simplifyName(nazwaWys) || nazwaWys;
-      laEl.innerHTML = '<div style="background:#eef2f7;padding:10px 15px;border-radius:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;">'
-        + '<span style="font-size:14px;"><b>' + esc(laName) + '</b>'
-        + (sn ? ' <span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(sn) + '</span>' : '')
-        + (qty > 1 ? ' <span style="color:#636e72;font-size:12px;">x' + qty + '</span>' : '')
-        + ' ' + getKategoriaBadge(kategoria) + '</span>'
-        + '<span style="color:#10b981;font-size:12px;font-weight:bold;">Dodano</span>'
-        + '</div>';
-      laEl.style.display = 'block';
+      renderWypLastAdded();
     }
 
     function filterWypNarz() {
@@ -2263,6 +2266,54 @@
       var q = document.getElementById('wypNarzSearch').value;
       if (!q) return allKatalogGrouped;
       return scoredSearch(allKatalogGrouped, ['nazwaWys', 'kategoria'], q);
+    }
+
+    function renderWypLastAdded() {
+      var laEl = document.getElementById('wypLastAdded');
+      if (!wypCartItems.length) { laEl.style.display = 'none'; return; }
+      var idx = wypCartItems.length - 1;
+      var c = wypCartItems[idx];
+      var laName = simplifyName(c.nazwaWys) || c.nazwaWys;
+      var canQty = (c.kategoria !== 'E');
+      var h = '<div style="background:#eef2f7;padding:8px 12px;border-radius:12px;margin-top:8px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<span style="font-size:14px;"><b>' + esc(laName) + '</b>'
+        + (c.sn ? ' <span style="color:#8b5cf6;font-size:12px;">SN: ' + esc(c.sn) + '</span>' : '')
+        + ' ' + getKategoriaBadge(c.kategoria) + '</span>'
+        + '<span onclick="wypLastRemove()" style="color:#ef4444;cursor:pointer;font-size:13px;font-weight:bold;">Usuń</span>'
+        + '</div>';
+      if (canQty) {
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'
+          + '<button class="qty-btn" onclick="wypLastQty(-1)">−</button>'
+          + '<span style="font-size:15px;font-weight:bold;min-width:24px;text-align:center;">' + c.qty + '</span>'
+          + '<button class="qty-btn" onclick="wypLastQty(1)">+</button>'
+          + '</div>';
+      }
+      h += '</div>';
+      laEl.innerHTML = h;
+      laEl.style.display = 'block';
+    }
+
+    function wypLastQty(delta) {
+      if (!wypCartItems.length) return;
+      var idx = wypCartItems.length - 1;
+      wypCartItems[idx].qty += delta;
+      if (wypCartItems[idx].qty <= 0) {
+        wypCartItems.splice(idx, 1);
+        renderWypLastAdded();
+      } else {
+        renderWypLastAdded();
+      }
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+    }
+
+    function wypLastRemove() {
+      if (!wypCartItems.length) return;
+      wypCartItems.splice(wypCartItems.length - 1, 1);
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+      renderWypLastAdded();
     }
 
     function wypCartChangeQty(idx, delta) {
@@ -2632,8 +2683,10 @@
     ========================= */
     function toggleSummary() {
       var section = document.getElementById('summaryCards');
+      var btn = document.getElementById('btnToggleSummary');
       if (section.style.display === 'none') {
         section.style.display = 'block';
+        btn.textContent = 'Powrót';
         showLoading();
         google.script.run.withSuccessHandler(function (data) {
           hideLoading();
@@ -2645,6 +2698,7 @@
         }).getSummaryData();
       } else {
         section.style.display = 'none';
+        btn.textContent = 'Podsumowanie stanu';
       }
     }
 
@@ -2655,9 +2709,19 @@
         return;
       }
 
+      // Filtruj wg aktualnego filtra kategorii
+      var filtered = data;
+      if (currentNarzKategoria !== 'all') {
+        filtered = data.filter(function (s) { return s.kategoria === currentNarzKategoria; });
+      }
+      if (!filtered.length) {
+        container.innerHTML = '<div class="empty-msg">Brak pozycji w tej kategorii</div>';
+        return;
+      }
+
       var html = '';
-      for (var i = 0; i < data.length; i++) {
-        var s = data[i];
+      for (var i = 0; i < filtered.length; i++) {
+        var s = filtered[i];
         var percent = s.stanPoczatkowy > 0
           ? Math.round((s.aktualnieNaStanie / s.stanPoczatkowy) * 100)
           : 0;
@@ -2665,7 +2729,7 @@
 
         html += '<div class="narz-card" style="margin-bottom:10px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-        html += '<b>' + esc(s.nazwaWys) + '</b>';
+        html += '<b>' + esc(simplifyName(s.nazwaWys) || s.nazwaWys) + '</b>';
         html += getKategoriaBadge(s.kategoria);
         html += '</div>';
 
@@ -2699,35 +2763,54 @@
       }).getRaportUszkodzonych();
     }
 
+    var raportUszkodzonychData = [];
+
     function renderRaportUszkodzonych(data) {
+      raportUszkodzonychData = data;
       var container = document.getElementById('raportUszkodzonychContent');
       if (!data || !data.length) {
         container.innerHTML = '<div class="empty-msg">Brak zgłoszonych uszkodzeń</div>';
         return;
       }
 
-      var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
-      html += '<thead><tr style="background:#fee2e2;text-align:left;">';
-      html += '<th style="padding:10px;border:1px solid #ddd;">Nazwa</th>';
-      html += '<th style="padding:10px;border:1px solid #ddd;">SN</th>';
-      html += '<th style="padding:10px;border:1px solid #ddd;">Opis</th>';
-      html += '<th style="padding:10px;border:1px solid #ddd;">Data</th>';
-      html += '<th style="padding:10px;border:1px solid #ddd;">Ilość</th>';
-      html += '</tr></thead><tbody>';
-
+      var html = '';
       for (var i = 0; i < data.length; i++) {
         var r = data[i];
-        html += '<tr>';
-        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(simplifyName(r.nazwaSys) || r.nazwaSys) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.sn) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.opisUszkodzenia) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(r.data) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #ddd;">' + r.ilosc + '</td>';
-        html += '</tr>';
+        html += '<div class="narz-card" style="margin-bottom:10px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+          + '<b>' + esc(simplifyName(r.nazwaSys) || r.nazwaSys) + '</b>'
+          + '<span style="font-size:12px;color:#636e72;">' + esc(r.data) + '</span>'
+          + '</div>'
+          + (r.sn ? '<div style="color:#8b5cf6;font-size:12px;">SN: ' + esc(r.sn) + '</div>' : '')
+          + '<div style="font-size:12px;color:#636e72;">Ilość: ' + r.ilosc + '</div>'
+          + '<div style="margin-top:6px;">'
+          + '<textarea id="dmgOpis_' + i + '" style="width:100%;min-height:40px;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;resize:vertical;">' + esc(r.opisUszkodzenia) + '</textarea>'
+          + '<button onclick="zapiszOpisUszkodzenia(' + i + ')" style="margin-top:4px;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">Zapisz opis</button>'
+          + '</div>'
+          + '</div>';
       }
-
-      html += '</tbody></table>';
       container.innerHTML = html;
+    }
+
+    function zapiszOpisUszkodzenia(idx) {
+      var r = raportUszkodzonychData[idx];
+      if (!r) return;
+      var nowyOpis = document.getElementById('dmgOpis_' + idx).value.trim();
+      r.opisUszkodzenia = nowyOpis;
+      toast('Zapisuję...', 'info');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            toast('Opis zapisany', 'success');
+          } else {
+            toast('Błąd: ' + (res.error || ''), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .edytujOpisUszkodzenia(r.idOp, nowyOpis);
     }
 
     /* =========================
