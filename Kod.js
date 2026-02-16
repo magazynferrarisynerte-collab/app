@@ -873,6 +873,29 @@ function edytujOpisUszkodzenia(idOp, nowyOpis) {
   }
 }
 
+function przeniesNaOsobe(idOp, nowaOsoba) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    var sheet = getSheet(SHEET_PRZESUNIECIA);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Brak danych' };
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (String(data[i][COLS_PRZES.ID_OPERACJI]) === String(idOp) && String(data[i][COLS_PRZES.STATUS]) === 'Wydane') {
+        sheet.getRange(i + 2, COLS_PRZES.OSOBA + 1).setValue(nowaOsoba);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Nie znaleziono operacji' };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (e) { }
+  }
+}
+
 // ============================================
 // INITIAL DATA
 // ============================================

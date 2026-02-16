@@ -1081,10 +1081,12 @@
         <div id="wypBottomBar" style="display:none;">
           <div style="display:flex;gap:6px;">
             <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit(false)"
-              style="flex:1;height:48px;font-size:15px;margin:0;" disabled>Nowe wydanie</button>
+              style="flex:2;height:48px;font-size:15px;margin:0;" disabled>Nowe wydanie</button>
             <button class="btn" id="wypWhatsBtn" onclick="wypSubmit(true)"
-              style="flex:1;height:48px;font-size:15px;background:#25d366;color:white;box-shadow:0 3px 0 #1da851;display:none;margin:0;"
+              style="flex:2;height:48px;font-size:15px;background:#25d366;color:white;box-shadow:0 3px 0 #1da851;display:none;margin:0;"
               disabled>WhatsApp</button>
+            <button class="btn" onclick="wypAddCustom()"
+              style="flex:1;height:48px;font-size:13px;margin:0;background:#8b5cf6;color:white;box-shadow:0 3px 0 #7c3aed;">Custom</button>
           </div>
         </div>
       </div>
@@ -1201,7 +1203,9 @@
           + '<b style="font-size:13px;">' + esc(detailName) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
           + (e.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
           + ' <span style="font-size:11px;color:#636e72;">' + esc(e.dataWydania) + '</span> ' + getKategoriaBadge(e.kategoria)
-          + '</div></div>';
+          + '</div>'
+          + '<span onclick="event.stopPropagation();przeniesNaInna(\'' + esc(e.idOp) + '\',\'' + esc(detailName) + '\')" style="color:#667eea;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:6px;">Przenieś</span>'
+          + '</div>';
       }
       container.innerHTML = h;
       document.getElementById('returnCartBar').classList.add('show');
@@ -1262,6 +1266,37 @@
       });
       var msg = 'Potwierdzenie wydania:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
       window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
+    }
+
+    function przeniesNaInna(idOp, nazwa) {
+      var osoby = allOsoby.filter(function (o) {
+        return !currentDetailOsoba || o.imie !== currentDetailOsoba.imie;
+      });
+      if (!osoby.length) { toast('Brak innych osób', 'error'); return; }
+      var lista = osoby.map(function (o, i) { return (i + 1) + '. ' + o.imie; }).join('\n');
+      var wybor = prompt('Przenieś "' + nazwa + '" na:\n' + lista + '\n\nWpisz numer:');
+      if (!wybor) return;
+      var idx = parseInt(wybor, 10) - 1;
+      if (idx < 0 || idx >= osoby.length) { toast('Nieprawidłowy wybór', 'error'); return; }
+      var nowaOsoba = osoby[idx].imie;
+
+      // Optimistic: update local log
+      for (var i = 0; i < allLogEntries.length; i++) {
+        if (allLogEntries[i].idOp === idOp) {
+          allLogEntries[i].osoba = nowaOsoba;
+          break;
+        }
+      }
+      toast('Przeniesiono na: ' + nowaOsoba, 'success');
+      openOsobaDetail(currentDetailOsoba.id);
+
+      google.script.run
+        .withFailureHandler(function (err) { toast('Błąd: ' + err.message, 'error'); loadLogBackground(); })
+        .withSuccessHandler(function (res) {
+          if (!res.success) toast('Błąd: ' + res.error, 'error');
+          loadLogBackground();
+        })
+        .przeniesNaOsobe(idOp, nowaOsoba);
     }
 
     function toggleReturnCart(idOp, el) {
@@ -2185,6 +2220,27 @@
       renderWypCart();
       renderWypNarzList(getFilteredGrouped());
       wypCollapseToNarz();
+    }
+
+    function wypAddCustom() {
+      var nazwa = prompt('Nazwa narzędzia (spoza listy):');
+      if (!nazwa || !nazwa.trim()) return;
+      nazwa = nazwa.trim();
+      var qtyStr = prompt('Ilość:', '1');
+      var qty = parseInt(qtyStr, 10);
+      if (!qty || qty < 1) qty = 1;
+      wypCartItems.push({
+        nazwaWys: nazwa,
+        sn: '',
+        qty: qty,
+        max: 9999,
+        kategoria: 'N',
+        flaga: false,
+        photoBase64: null,
+        custom: true
+      });
+      renderWypCart();
+      toast('Dodano: ' + nazwa, 'success');
     }
 
     function wypChangeOsoba() {
