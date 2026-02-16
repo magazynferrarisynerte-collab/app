@@ -2229,12 +2229,25 @@
     }
 
     function wypAddCustom() {
-      var nazwa = prompt('Nazwa narzędzia (spoza listy):');
-      if (!nazwa || !nazwa.trim()) return;
-      nazwa = nazwa.trim();
-      var qtyStr = prompt('Ilość:', '1');
-      var qty = parseInt(qtyStr, 10);
-      if (!qty || qty < 1) qty = 1;
+      var df = document.getElementById('wypDynamicFields');
+      df.innerHTML = '<div style="background:#f3f0ff;padding:10px 12px;border-radius:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        + '<b style="font-size:14px;color:#8b5cf6;">Dodaj spoza listy</b>'
+        + '<span onclick="document.getElementById(\'wypDynamicFields\').style.display=\'none\'" style="cursor:pointer;font-size:20px;color:#636e72;">&times;</span>'
+        + '</div>'
+        + '<input type="text" id="customNazwa" placeholder="Nazwa narzędzia" style="width:100%;height:40px;font-size:14px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px;margin-bottom:6px;">'
+        + '<div style="display:flex;gap:6px;align-items:center;">'
+        + '<input type="number" id="customQty" value="1" min="1" style="width:60px;height:36px;font-size:14px;border:1px solid #d1d5db;border-radius:8px;padding:0 8px;text-align:center;">'
+        + '<button onclick="wypCustomSubmit()" style="flex:1;height:36px;background:#8b5cf6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;">Dodaj</button>'
+        + '</div></div>';
+      df.style.display = 'block';
+      document.getElementById('customNazwa').focus();
+    }
+
+    function wypCustomSubmit() {
+      var nazwa = document.getElementById('customNazwa').value.trim();
+      if (!nazwa) { toast('Wpisz nazwę', 'error'); return; }
+      var qty = parseInt(document.getElementById('customQty').value, 10) || 1;
       wypCartItems.push({
         nazwaWys: nazwa,
         sn: '',
@@ -2245,7 +2258,10 @@
         photoBase64: null,
         custom: true
       });
+      document.getElementById('wypDynamicFields').style.display = 'none';
       renderWypCart();
+      document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+      renderWypLastAdded();
       toast('Dodano: ' + nazwa, 'success');
     }
 
