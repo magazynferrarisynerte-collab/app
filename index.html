@@ -579,6 +579,11 @@
       color: #991b1b;
     }
 
+    .status-returned {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+
     .status-consumed {
       background: #fef3c7;
       color: #92400e;
@@ -1183,7 +1188,7 @@
 
     var STATUS_STYLES = {
       'Wydane': { cls: 'status-borrowed', label: 'WYDANE' },
-      'Zwrocone': { cls: 'status-available', label: 'ZWRÓCONE' },
+      'Zwrocone': { cls: 'status-returned', label: 'ZWRÓCONE' },
       'Zuzyte': { cls: 'status-consumed', label: 'ZUŻYTE' },
       'Uszkodzone': { cls: 'status-damaged', label: 'USZKODZONE' }
     };
@@ -2559,6 +2564,18 @@
       var c = wypCartItems[idx];
       var laName = simplifyName(c.nazwaWys) || c.nazwaWys;
       var canQty = (c.kategoria !== 'E');
+
+      // Check if WhatsApp should be visible
+      var hasPhone = false;
+      if (wypOsobaId) {
+        for (var i = 0; i < allOsoby.length; i++) {
+          if (allOsoby[i].id === wypOsobaId && allOsoby[i].telefon && allOsoby[i].telefon.trim()) {
+            hasPhone = true;
+            break;
+          }
+        }
+      }
+
       var h = '<div style="background:#eef2f7;padding:6px 10px;border-radius:10px;margin-top:4px;">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;">'
         + '<span style="font-size:13px;"><b>' + esc(laName) + '</b>'
@@ -2574,6 +2591,15 @@
           + '</div>';
       }
       h += '</div>';
+
+      // Submit buttons
+      h += '<div style="display:flex;gap:6px;margin-top:6px;">'
+        + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(false)" style="flex:1;height:44px;font-size:14px;margin:0;">Wydaj</button>';
+      if (hasPhone) {
+        h += '<button class="btn" id="wypWhatsBtn2" onclick="wypSubmit(true)" style="flex:1;height:44px;font-size:14px;background:#25d366;color:white;box-shadow:0 3px 0 #1da851;margin:0;">WhatsApp</button>';
+      }
+      h += '</div>';
+
       laEl.innerHTML = h;
       laEl.style.display = 'block';
     }
@@ -2731,10 +2757,14 @@
 
       var savedCart = wypCartItems.slice();
 
-      document.getElementById('wypSubmitBtn').disabled = true;
-      document.getElementById('wypSubmitBtn').textContent = 'Wysyłam...';
+      var btn1 = document.getElementById('wypSubmitBtn');
+      var btn2 = document.getElementById('wypSubmitBtn2');
+      if (btn1) { btn1.disabled = true; btn1.textContent = 'Wysyłam...'; }
+      if (btn2) { btn2.disabled = true; btn2.textContent = 'Wysyłam...'; }
       var whatsBtn = document.getElementById('wypWhatsBtn');
+      var whatsBtn2 = document.getElementById('wypWhatsBtn2');
       if (whatsBtn) whatsBtn.disabled = true;
+      if (whatsBtn2) whatsBtn2.disabled = true;
 
       google.script.run
         .withSuccessHandler(function (res) {
@@ -2753,16 +2783,26 @@
             loadKatalogBackground();
           } else {
             toast("Błąd: " + (res.error || 'Nieznany'), "error");
-            document.getElementById('wypSubmitBtn').disabled = false;
-            document.getElementById('wypSubmitBtn').textContent = 'Wydaj';
+            var btn1 = document.getElementById('wypSubmitBtn');
+            var btn2 = document.getElementById('wypSubmitBtn2');
+            if (btn1) { btn1.disabled = false; btn1.textContent = 'Wydaj'; }
+            if (btn2) { btn2.disabled = false; btn2.textContent = 'Wydaj'; }
+            var whatsBtn = document.getElementById('wypWhatsBtn');
+            var whatsBtn2 = document.getElementById('wypWhatsBtn2');
             if (whatsBtn) whatsBtn.disabled = false;
+            if (whatsBtn2) whatsBtn2.disabled = false;
           }
         })
         .withFailureHandler(function (err) {
           toast("Błąd: " + err.message, "error");
-          document.getElementById('wypSubmitBtn').disabled = false;
-          document.getElementById('wypSubmitBtn').textContent = 'Wydaj';
+          var btn1 = document.getElementById('wypSubmitBtn');
+          var btn2 = document.getElementById('wypSubmitBtn2');
+          if (btn1) { btn1.disabled = false; btn1.textContent = 'Wydaj'; }
+          if (btn2) { btn2.disabled = false; btn2.textContent = 'Wydaj'; }
+          var whatsBtn = document.getElementById('wypWhatsBtn');
+          var whatsBtn2 = document.getElementById('wypWhatsBtn2');
           if (whatsBtn) whatsBtn.disabled = false;
+          if (whatsBtn2) whatsBtn2.disabled = false;
         })
         .wydajBatch(wypOsobaId, items);
     }
