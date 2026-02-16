@@ -844,10 +844,11 @@
         oninput="toggleClearBtn('searchLog')">
       <button class="search-clear" id="searchLog-clear" onclick="clearSearch('searchLog')">&times;</button>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:15px;">
+    <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
       <button class="filter-btn" onclick="filterLogStatus('all',this)">Wszystkie</button>
       <button class="filter-btn active" onclick="filterLogStatus('active',this)">Aktywne</button>
       <button class="filter-btn" onclick="filterLogStatus('returned',this)">Zwrócone</button>
+      <button class="filter-btn" onclick="filterLogStatus('damaged',this)">Uszkodzone</button>
     </div>
     <div id="logList" ontouchstart="document.getElementById('searchLog').blur()"></div>
     <button class="fab" onclick="openWypozyczModal()">+</button>
@@ -1515,6 +1516,8 @@
         filtered = filtered.filter(function (i) { return i.status === 'Wydane'; });
       } else if (currentLogFilter === 'returned') {
         filtered = filtered.filter(function (i) { return i.status === 'Zwrocone'; });
+      } else if (currentLogFilter === 'damaged') {
+        filtered = filtered.filter(function (i) { return i.status === 'Uszkodzone'; });
       }
 
       if (q) {
@@ -2591,18 +2594,22 @@
         + '<span onclick="wypLastRemove()" style="color:#ef4444;cursor:pointer;font-size:12px;font-weight:bold;">Usuń</span>'
         + '</div>';
       if (canQty) {
-        h += '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">'
+        h += '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;">'
           + '<button class="qty-btn" onclick="wypLastQty(-1)" style="width:28px;height:28px;font-size:16px;">−</button>'
           + '<span style="font-size:14px;font-weight:bold;min-width:20px;text-align:center;">' + c.qty + '</span>'
           + '<button class="qty-btn" onclick="wypLastQty(1)" style="width:28px;height:28px;font-size:16px;">+</button>'
-          + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(' + hasPhone + ')" style="flex:1;height:32px;font-size:13px;margin:0;margin-left:6px;">'
-          + (hasPhone ? 'Wydaj WhatsApp' : 'Wydaj') + '</button>'
-          + '</div>';
+          + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(false)" style="flex:1;height:32px;font-size:12px;margin:0;margin-left:4px;">Wydaj</button>';
+        if (hasPhone) {
+          h += '<button class="btn" id="wypWhatsBtn2" onclick="wypSubmit(true)" style="flex:1;height:32px;font-size:12px;margin:0;background:#25d366;color:white;box-shadow:0 2px 0 #1da851;">WhatsApp</button>';
+        }
+        h += '</div>';
       } else {
-        h += '<div style="display:flex;gap:6px;margin-top:4px;">'
-          + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(' + hasPhone + ')" style="flex:1;height:32px;font-size:13px;margin:0;">'
-          + (hasPhone ? 'Wydaj WhatsApp' : 'Wydaj') + '</button>'
-          + '</div>';
+        h += '<div style="display:flex;gap:4px;margin-top:4px;">'
+          + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(false)" style="flex:1;height:32px;font-size:12px;margin:0;">Wydaj</button>';
+        if (hasPhone) {
+          h += '<button class="btn" id="wypWhatsBtn2" onclick="wypSubmit(true)" style="flex:1;height:32px;font-size:12px;margin:0;background:#25d366;color:white;box-shadow:0 2px 0 #1da851;">WhatsApp</button>';
+        }
+        h += '</div>';
       }
       h += '</div>';
 
