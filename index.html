@@ -176,28 +176,31 @@
     #wypStep2:not(.narz-collapsed) #wypNarzList,
     #wypStep2:not(.narz-collapsed) #wypDynamicFields,
     #wypStep2:not(.narz-collapsed) #wypKatFilters,
-    #wypStep2:not(.narz-collapsed) #wypCollapsedBar,
+    #wypStep2:not(.narz-collapsed) #wypCollapsedRow,
     #wypStep2:not(.narz-collapsed) #wypSearchRow,
     #wypStep2:not(.narz-collapsed) #wypLastAdded {
       display: none !important;
     }
 
 
-    #wypStep2 #wypCollapsedBar {
+    #wypStep2 #wypCollapsedRow {
       display: none;
+      margin-bottom: 5px;
+    }
+
+    #wypStep2 #wypCollapsedBar {
       background: #667eea;
       color: white;
       padding: 8px 15px;
       border-radius: 10px;
-      margin-bottom: 5px;
       font-weight: bold;
       font-size: 14px;
       cursor: pointer;
       text-align: center;
     }
 
-    #wypStep2.narz-collapsed #wypCollapsedBar {
-      display: block;
+    #wypStep2.narz-collapsed #wypCollapsedRow {
+      display: flex;
     }
 
     .log-card .log-card-row {
@@ -1056,7 +1059,12 @@
           <button class="filter-btn" onclick="filterWypKategoria('Z',this)"
             style="padding:8px;font-size:13px;">Zużyw.</button>
         </div>
-        <div id="wypCollapsedBar" onclick="wypExpandUI()">Koszyk: <span id="wypCollapsedCount">0</span> poz. — rozwiń
+        <div style="display:flex;gap:6px;" id="wypCollapsedRow">
+          <div id="wypCollapsedBar" onclick="wypExpandUI()" style="flex:2;">Koszyk: <span
+              id="wypCollapsedCount">0</span> poz. — rozwiń</div>
+          <div onclick="wypAddCustom()"
+            style="flex:1;background:#8b5cf6;color:white;padding:8px 10px;border-radius:10px;font-weight:bold;font-size:13px;cursor:pointer;text-align:center;">
+            Custom</div>
         </div>
 
         <!-- Dynamic fields panel (appears when tool is clicked) -->
@@ -1081,12 +1089,10 @@
         <div id="wypBottomBar" style="display:none;">
           <div style="display:flex;gap:6px;">
             <button class="btn btn-success" id="wypSubmitBtn" onclick="wypSubmit(false)"
-              style="flex:2;height:48px;font-size:15px;margin:0;" disabled>Nowe wydanie</button>
+              style="flex:1;height:48px;font-size:15px;margin:0;" disabled>Nowe wydanie</button>
             <button class="btn" id="wypWhatsBtn" onclick="wypSubmit(true)"
-              style="flex:2;height:48px;font-size:15px;background:#25d366;color:white;box-shadow:0 3px 0 #1da851;display:none;margin:0;"
+              style="flex:1;height:48px;font-size:15px;background:#25d366;color:white;box-shadow:0 3px 0 #1da851;display:none;margin:0;"
               disabled>WhatsApp</button>
-            <button class="btn" onclick="wypAddCustom()"
-              style="flex:1;height:48px;font-size:13px;margin:0;background:#8b5cf6;color:white;box-shadow:0 3px 0 #7c3aed;">Custom</button>
           </div>
         </div>
       </div>
