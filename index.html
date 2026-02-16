@@ -313,16 +313,44 @@
     }
 
     /* FORMULARZE */
+    .search-wrapper {
+      position: relative;
+      margin-bottom: 15px;
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #e5e7eb;
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      font-size: 16px;
+      color: #6b7280;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .search-clear.show {
+      display: flex;
+    }
+
     .search-input,
     .form-input,
     .picker-search {
       width: 100%;
       height: 70px;
       padding: 0 20px;
+      padding-right: 50px;
       font-size: 22px;
       border: 3px solid #dfe6e9;
       border-radius: 15px;
-      margin-bottom: 15px;
+      margin-bottom: 0;
       background: white;
       outline: none;
     }
@@ -806,7 +834,11 @@
 
   <!-- TAB: LOG -->
   <div class="tab-content active" id="tabLog">
-    <input type="text" id="searchLog" class="search-input" placeholder="Szukaj w logach (osoba, narzędzie, SN)">
+    <div class="search-wrapper">
+      <input type="text" id="searchLog" class="search-input" placeholder="Szukaj w logach (osoba, narzędzie, SN)"
+        oninput="toggleClearBtn('searchLog')">
+      <button class="search-clear" id="searchLog-clear" onclick="clearSearch('searchLog')">&times;</button>
+    </div>
     <div style="display:flex;gap:10px;margin-bottom:15px;">
       <button class="filter-btn" onclick="filterLogStatus('all',this)">Wszystkie</button>
       <button class="filter-btn active" onclick="filterLogStatus('active',this)">Aktywne</button>
@@ -818,7 +850,11 @@
 
   <!-- TAB: OSOBY -->
   <div class="tab-content" id="tabOsoby">
-    <input type="text" class="search-input" id="searchOsoby" placeholder="Szukaj osoby...">
+    <div class="search-wrapper">
+      <input type="text" class="search-input" id="searchOsoby" placeholder="Szukaj osoby..."
+        oninput="toggleClearBtn('searchOsoby')">
+      <button class="search-clear" id="searchOsoby-clear" onclick="clearSearch('searchOsoby')">&times;</button>
+    </div>
     <button class="btn btn-primary" onclick="exportAllContacts()"
       style="width:100%;height:50px;font-size:14px;margin-bottom:15px;">Eksportuj wszystkie kontakty (.vcf)</button>
     <div id="osobyList" ontouchstart="document.getElementById('searchOsoby').blur()"></div>
@@ -836,7 +872,11 @@
     </div>
     <div id="summaryCards" style="display:none;margin-bottom:15px;"></div>
 
-    <input type="text" class="search-input" id="searchNarzedzia" placeholder="Szukaj narzędzia...">
+    <div class="search-wrapper">
+      <input type="text" class="search-input" id="searchNarzedzia" placeholder="Szukaj narzędzia..."
+        oninput="toggleClearBtn('searchNarzedzia')">
+      <button class="search-clear" id="searchNarzedzia-clear" onclick="clearSearch('searchNarzedzia')">&times;</button>
+    </div>
     <div id="narzKatFilters" style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;">
       <button class="filter-btn active" onclick="filterNarzKategoria('all',this)">Wszystkie</button>
       <button class="filter-btn" onclick="filterNarzKategoria('E',this)">Ewidencjonowane</button>
@@ -879,14 +919,23 @@
           style="height:36px;font-size:13px;flex:1;margin-bottom:0;border-radius:10px;">Drukuj / CSV</button>
       </div>
       <div style="font-weight:bold;margin-bottom:6px;font-size:14px;">Aktywne wypożyczenia:</div>
-      <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..."
-        oninput="filterOsobaWyp()" style="height:40px;font-size:14px;margin-bottom:6px;">
+      <div class="search-wrapper" style="margin-bottom:6px;">
+        <input type="text" class="search-input" id="searchOsobaWyp" placeholder="Szukaj wypożyczenia..."
+          oninput="filterOsobaWyp();toggleClearBtn('searchOsobaWyp')"
+          style="height:40px;font-size:14px;margin-bottom:0;">
+        <button class="search-clear" id="searchOsobaWyp-clear" onclick="clearSearch('searchOsobaWyp')"
+          style="width:24px;height:24px;font-size:14px;">&times;</button>
+      </div>
       <div id="osobaWypList"></div>
       <div class="return-cart-bar" id="returnCartBar">
-        <div style="display:flex;gap:6px;align-items:center;">
-          <span style="font-size:12px;font-weight:bold;">Zaznaczono: <span id="returnCartCount">0</span></span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <span onclick="toggleSelectAll()"
+            style="font-size:11px;color:#667eea;cursor:pointer;font-weight:bold;">Wszystkie</span>
+          <span style="font-size:12px;font-weight:bold;margin-right:auto;">(<span id="returnCartCount">0</span>)</span>
           <button class="btn btn-danger" id="returnCartBtn" onclick="returnCartSubmit()"
-            style="padding:6px 14px;font-size:12px;height:auto;min-height:0;border-radius:8px;box-shadow:none;margin:0;">Zwróć</button>
+            style="padding:6px 12px;font-size:12px;height:auto;min-height:0;border-radius:8px;box-shadow:none;margin:0;">Zwróć</button>
+          <button class="btn" id="transferBtn" onclick="transferSelected()"
+            style="padding:6px 12px;font-size:12px;height:auto;min-height:0;border-radius:8px;box-shadow:none;margin:0;background:#667eea;color:white;">Przekaż</button>
           <button class="btn" id="returnWhatsBtn" onclick="sendWhatsAppReturn()"
             style="display:none;padding:6px 10px;font-size:12px;height:auto;min-height:0;border-radius:8px;background:#25d366;color:white;box-shadow:none;margin:0;">WhatsApp</button>
         </div>
@@ -1209,9 +1258,7 @@
           + '<b style="font-size:13px;">' + esc(detailName) + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + '</b>'
           + (e.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
           + ' <span style="font-size:11px;color:#636e72;">' + esc(e.dataWydania) + '</span> ' + getKategoriaBadge(e.kategoria)
-          + '</div>'
-          + '<span onclick="event.stopPropagation();przeniesNaInna(\'' + esc(e.idOp) + '\',\'' + esc(detailName) + '\')" style="color:#667eea;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:6px;">Przenieś</span>'
-          + '</div>';
+          + '</div></div>';
       }
       container.innerHTML = h;
       document.getElementById('returnCartBar').classList.add('show');
@@ -1274,26 +1321,46 @@
       window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
     }
 
-    function przeniesNaInna(idOp, nazwa) {
+    function toggleSelectAll() {
+      var allSelected = returnCartIds.length === currentDetailActive.length;
+      if (allSelected) {
+        returnCartIds = [];
+      } else {
+        returnCartIds = currentDetailActive.map(function (e) { return e.idOp; });
+      }
+      renderOsobaWypList(currentDetailActive);
+    }
+
+    function transferSelected() {
+      if (!returnCartIds.length) { toast('Zaznacz pozycje do przekazania', 'error'); return; }
       var osoby = allOsoby.filter(function (o) {
         return !currentDetailOsoba || o.imie !== currentDetailOsoba.imie;
       });
       if (!osoby.length) { toast('Brak innych osób', 'error'); return; }
-      var lista = osoby.map(function (o, i) { return (i + 1) + '. ' + o.imie; }).join('\n');
-      var wybor = prompt('Przenieś "' + nazwa + '" na:\n' + lista + '\n\nWpisz numer:');
-      if (!wybor) return;
-      var idx = parseInt(wybor, 10) - 1;
-      if (idx < 0 || idx >= osoby.length) { toast('Nieprawidłowy wybór', 'error'); return; }
-      var nowaOsoba = osoby[idx].imie;
 
-      // Optimistic: update local log
+      var panel = document.getElementById('osobaWypList');
+      var h = '<div style="background:#eef0ff;padding:10px 12px;border-radius:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+        + '<b style="font-size:14px;color:#667eea;">Przekaż ' + returnCartIds.length + ' poz. na:</b>'
+        + '<span onclick="renderOsobaWypList(currentDetailActive)" style="cursor:pointer;font-size:20px;color:#636e72;">&times;</span>'
+        + '</div>';
+      for (var i = 0; i < osoby.length; i++) {
+        h += '<div onclick="executeTransfer(\'' + esc(osoby[i].imie) + '\')" style="padding:10px 12px;background:white;border-radius:8px;margin-bottom:4px;cursor:pointer;font-size:14px;font-weight:bold;">'
+          + esc(osoby[i].imie) + '</div>';
+      }
+      h += '</div>';
+      panel.innerHTML = h;
+    }
+
+    function executeTransfer(nowaOsoba) {
+      var ids = returnCartIds.slice();
       for (var i = 0; i < allLogEntries.length; i++) {
-        if (allLogEntries[i].idOp === idOp) {
+        if (ids.indexOf(allLogEntries[i].idOp) !== -1) {
           allLogEntries[i].osoba = nowaOsoba;
-          break;
         }
       }
-      toast('Przeniesiono na: ' + nowaOsoba, 'success');
+      toast('Przekazano ' + ids.length + ' poz. → ' + nowaOsoba, 'success');
+      returnCartIds = [];
       openOsobaDetail(currentDetailOsoba.id);
 
       google.script.run
@@ -1302,7 +1369,7 @@
           if (!res.success) toast('Błąd: ' + res.error, 'error');
           loadLogBackground();
         })
-        .przeniesNaOsobe(idOp, nowaOsoba);
+        .przeniesNaOsobe(ids, nowaOsoba);
     }
 
     function toggleReturnCart(idOp, el) {
@@ -1454,6 +1521,36 @@
       el.textContent = msg;
       el.className = 'toast show ' + type;
       setTimeout(function () { el.classList.remove('show'); }, duration);
+    }
+
+    function toggleClearBtn(inputId) {
+      var input = document.getElementById(inputId);
+      var btn = document.getElementById(inputId + '-clear');
+      if (btn) {
+        if (input.value.trim()) {
+          btn.classList.add('show');
+        } else {
+          btn.classList.remove('show');
+        }
+      }
+    }
+
+    function clearSearch(inputId) {
+      var input = document.getElementById(inputId);
+      input.value = '';
+      toggleClearBtn(inputId);
+
+      // Trigger appropriate filter
+      if (inputId === 'searchLog') {
+        applyLogFilters();
+      } else if (inputId === 'searchOsoby') {
+        filterOsoby();
+      } else if (inputId === 'searchNarzedzia') {
+        applyNarzFilters();
+      } else if (inputId === 'searchOsobaWyp') {
+        filterOsobaWyp();
+      }
+      input.blur();
     }
 
     function openModal(id) { document.getElementById(id).classList.add('show'); }
@@ -2364,7 +2461,6 @@
     }
 
     function finishAddToCart(nazwaWys, sn, qty, kategoria, photoBase64) {
-      // Find max available
       var group = currentSelectedGroup;
       var maxAvailable = group.totalStock;
       for (var c = 0; c < wypCartItems.length; c++) {
@@ -2376,11 +2472,28 @@
         return;
       }
 
-      // Check if same SN already in cart
+      // E z SN — sprawdź duplikat
       if (sn) {
         for (var i = 0; i < wypCartItems.length; i++) {
           if (wypCartItems[i].sn === sn) {
             toast('Ten egzemplarz (SN) jest już w koszyku', 'error');
+            return;
+          }
+        }
+      }
+
+      // N/Z bez SN — zwiększ ilość jeśli już jest w koszyku
+      if (!sn && kategoria !== 'E') {
+        for (var j = 0; j < wypCartItems.length; j++) {
+          if (wypCartItems[j].nazwaWys === nazwaWys && !wypCartItems[j].sn) {
+            wypCartItems[j].qty += qty;
+            document.getElementById('wypDynamicFields').style.display = 'none';
+            currentSelectedGroup = null;
+            renderWypCart();
+            renderWypNarzList(getFilteredGrouped());
+            document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+            renderWypLastAdded();
+            toast('Zwiększono ilość: ' + nazwaWys, 'success');
             return;
           }
         }

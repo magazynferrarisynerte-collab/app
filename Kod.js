@@ -471,43 +471,37 @@ function wydajBatch(idOsoby, items) {
         }
       }
 
-      if (!resolved) {
-        errors.push('Brak dostępnego: ' + item.nazwaWys);
-        continue;
-      }
-
-      // Decrement stock
-      var newStock = resolved.stock - qty;
-      katSheet.getRange(resolved.row + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(newStock);
-      katData[resolved.row][COLS_KATALOG.AKTUALNIE_NA_STANIE] = newStock;
-
       // Determine status
       var status = (item.kategoria === 'Z') ? 'Zuzyte' : 'Wydane';
 
       // Handle photo (optional for any category)
       var photoUrl = '';
+      var opId = generateId('OP');
       if (item.photoBase64) {
-        var opId = generateId('OP');
         photoUrl = savePhotoToDrive(item.photoBase64, 'Wydania', opId);
       }
 
-      var opId2 = photoUrl ? opId : generateId('OP');
+      if (resolved) {
+        // Decrement stock
+        var newStock = resolved.stock - qty;
+        katSheet.getRange(resolved.row + 1, COLS_KATALOG.AKTUALNIE_NA_STANIE + 1).setValue(newStock);
+        katData[resolved.row][COLS_KATALOG.AKTUALNIE_NA_STANIE] = newStock;
 
-      // Append to Przesunięcia
-      przesSheet.appendRow([
-        opId2,                                               // ID_Operacji
-        new Date(),                                          // Data_Wydania
-        osobaImie,                                           // Osoba
-        String(resolved.data[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''), // Nazwa_Systemowa
-        extractSN(resolved.data[COLS_KATALOG.SN]),                // SN
-        qty,                                                 // Ilosc
-        item.kategoria,                                      // Kategoria
-        status,                                              // Status
-        photoUrl,                                            // Zdjecie_Wydanie_URL
-        '',                                                  // Zdjecie_Zwrot_URL
-        '',                                                  // Data_Zwrotu
-        ''                                                   // Opis_Uszkodzenia
-      ]);
+        przesSheet.appendRow([
+          opId, new Date(), osobaImie,
+          String(resolved.data[COLS_KATALOG.NAZWA_SYSTEMOWA] || ''),
+          extractSN(resolved.data[COLS_KATALOG.SN]),
+          qty, item.kategoria, status, photoUrl, '', '', ''
+        ]);
+      } else {
+        // Custom item — nie ma w katalogu, wpisz bezpośrednio
+        przesSheet.appendRow([
+          opId, new Date(), osobaImie,
+          item.nazwaWys,
+          item.sn || '',
+          qty, item.kategoria || 'N', status, photoUrl, '', '', ''
+        ]);
+      }
     }
 
     CacheService.getScriptCache().remove("katalog");
@@ -873,7 +867,7 @@ function edytujOpisUszkodzenia(idOp, nowyOpis) {
   }
 }
 
-function przeniesNaOsobe(idOp, nowaOsoba) {
+function przeniesNaOsobe(ids, nowaOsoba) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
@@ -881,14 +875,20 @@ function przeniesNaOsobe(idOp, nowaOsoba) {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, error: 'Brak danych' };
 
+    var idArr = Array.isArray(ids) ? ids : [ids];
+    var idSet = {};
+    for (var k = 0; k < idArr.length; k++) idSet[String(idArr[k])] = true;
+
     var data = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+    var count = 0;
     for (var i = 0; i < data.length; i++) {
-      if (String(data[i][COLS_PRZES.ID_OPERACJI]) === String(idOp) && String(data[i][COLS_PRZES.STATUS]) === 'Wydane') {
+      var opId = String(data[i][COLS_PRZES.ID_OPERACJI]);
+      if (idSet[opId] && String(data[i][COLS_PRZES.STATUS]) === 'Wydane') {
         sheet.getRange(i + 2, COLS_PRZES.OSOBA + 1).setValue(nowaOsoba);
-        return { success: true };
+        count++;
       }
     }
-    return { success: false, error: 'Nie znaleziono operacji' };
+    return { success: true, count: count };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
