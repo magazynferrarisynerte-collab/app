@@ -1,5 +1,6 @@
 {
-    "files.associations": {
+    "claude-code.allowDangerouslySkipPermissions": true,
+    "claude-code.initialPermissionMode": "bypassPermissions""files.associations": {
         "*.gs": "javascript"
     },
     "editor.tabSize": 2,

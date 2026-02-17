@@ -1,0 +1,24 @@
+Web search results for query: "Gemini API free tier rate limits 2025 2026 gemini-2.0-flash requests per minute"
+
+Links: [{"title":"Rate limits | Gemini API | Google AI for Developers","url":"https://ai.google.dev/gemini-api/docs/rate-limits"},{"title":"Gemini API Free Tier Limits 2025: Complete Guide to Rate Limits, 429 Errors & Solutions | AI Free API","url":"https://www.aifreeapi.com/en/posts/gemini-api-free-tier-limit"},{"title":"Gemini API Free Tier Rate Limits: Complete Guide for 2026 - All Models, All Limits, Plus December 2025 Updates | AI Free API","url":"https://www.aifreeapi.com/en/posts/gemini-api-free-tier-rate-limits"},{"title":"Gemini Advanced Rate Limit: Complete 2025 Guide with December Updates - Complete Rate Limit Reference: Free Tier to Enterprise | December 2025 | AI Free API","url":"https://www.aifreeapi.com/en/posts/gemini-advanced-rate-limit"},{"title":"Gemini has slashed free API limits, here's what to use instead","url":"https://www.howtogeek.com/gemini-slashed-free-api-limits-what-to-use-instead/"},{"title":"Rate limits and quotas | Firebase AI Logic","url":"https://firebase.google.com/docs/ai-logic/quotas"},{"title":"Gemini API Rate Limits: Complete Guide to All Tiers, Models & December 2025 Updates - Everything Developers Need to Know About Gemini API Quotas | AI Free API","url":"https://www.aifreeapi.com/en/posts/gemini-api-rate-limit"},{"title":"Gemini 3.0 Ultra Free Tier Limits: Complete 2025 Guide (What Actually Exists) - Cursor IDE 博客","url":"https://www.cursor-ide.com/blog/gemini-3-ultra-free-tier-limits"},{"title":"Gemini API Free Tier 2026: Complete Guide to Rate Limits, Models & Getting Started - Everything developers need to know about Google's free AI API access | LaoZhang AI Blog","url":"https://blog.laozhang.ai/en/posts/gemini-api-free-tier"},{"title":"Is Gemini API Free? (2025)","url":"https://www.spurnow.com/en/blogs/is-gemini-api-free"}]
+
+Based on the search results, here's what I found regarding Gemini API free tier rate limits for 2025-2026:
+
+## Gemini 2.0 Flash Specific Limits
+
+Gemini 2.0 Flash, the previous generation, remains available with 5 RPM limits similar to the Pro model. However, other sources indicate higher limits for this model.
+
+## General Free Tier Limits (as of February 2026)
+
+As of February 2026, the free tier includes Gemini 2.5 Pro, Flash, and Flash-Lite models with rate limits ranging from 5-15 requests per minute and 100-1,000 requests per day depending on the model.
+
+More specifically: Gemini 2.5 Pro offers 5 RPM and 100 RPD, Gemini 2.5 Flash provides 10 RPM and 250 RPD, while Flash-Lite leads with 15 RPM and 1,000 RPD.
+
+## Recent Changes (December 2025)
+
+On December 7, 2025, Google reduced free tier quotas by 50-80%, making optimization strategies essential for developers who rely on free access. Google reduced free tier rate limits by 50-80% between December 6-7, 2025. This wasn't widely announced, so many developers discovered it only after their applications started failing with 429 errors.
+
+All models share a 250,000 TPM limit and access to the 1 million token context window.
+
+
+REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.

@@ -7,7 +7,21 @@
       "Write(*)",
       "Edit(*)",
       "Glob(*)",
-      "Grep(*)"
-    ]
-  }
+      "Grep(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "Task(*)",
+      "TodoWrite(*)",
+      "NotebookEdit(*)",
+      "AskUserQuestion(*)",
+      "EnterPlanMode(*)",
+      "ExitPlanMode(*)",
+      "Skill(*)",
+      "TaskOutput(*)",
+      "TaskStop(*)",
+      "mcp__*(*)"
+    ],
+    "deny": []
+  },
+  "enableAllProjectMcpServers": true
 }
