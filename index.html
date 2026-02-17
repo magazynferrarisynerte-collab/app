@@ -1170,6 +1170,7 @@
     var allKatalogGrouped = [];
     var allLogEntries = [];
     var summaryData = [];
+    var lastWypNarzFiltered = [];
 
     var wypOsobaId = null;
     var wypOsobaName = '';
@@ -2023,10 +2024,6 @@
                 + '</div>';
             }
             h += '</div>';
-          } else {
-            h += '<div style="font-size:12px;color:#b2bec3;">'
-              + g.aktualnieNaStanie + '/' + g.stanPoczatkowy
-              + '</div>';
           }
 
           h += '<div style="margin-top:4px;display:flex;gap:15px;align-items:center;">';
@@ -2282,7 +2279,7 @@
       document.getElementById('wypNarzSearch').value = '';
       document.getElementById('wypWhatsBtn').style.display = 'none';
       resetWypKatFilters();
-      renderWypNarzList(allKatalogGrouped);
+      renderWypNarzList(allKatalog);
       renderWypCart();
       setupNarzScrollCollapse();
     }
@@ -2304,7 +2301,7 @@
       var hasPhone = osoba && osoba.telefon && osoba.telefon.trim().length > 0;
       document.getElementById('wypWhatsBtn').style.display = hasPhone ? 'block' : 'none';
       document.getElementById('wypDynamicFields').style.display = 'none';
-      renderWypNarzList(allKatalogGrouped);
+      renderWypNarzList(allKatalog);
       renderWypCart();
       setupNarzScrollCollapse();
     }
@@ -2391,124 +2388,68 @@
         container.innerHTML = '<div class="empty-msg">Brak narzędzi</div>';
         return;
       }
+      lastWypNarzFiltered = data;
       var h = '';
       for (var i = 0; i < data.length; i++) {
-        var g = data[i];
-        // Calculate available stock minus cart items
-        var inCart = 0;
-        for (var c = 0; c < wypCartItems.length; c++) {
-          if (wypCartItems[c].nazwaWys === g.nazwaWys) {
-            inCart += wypCartItems[c].qty;
-          }
-        }
-        var available = g.totalStock - inCart;
-        if (available <= 0) continue;
+        var item = data[i];
+        if (item.aktualnieNaStanie <= 0) continue;
 
-        h += '<div class="picker-item" onclick="wypSelectTool(\'' + esc(g.nazwaWys) + '\')">'
+        // Sprawdź czy E z SN już jest w koszyku
+        if (item.kategoria === 'E' && item.sn) {
+          var alreadyInCart = false;
+          for (var c = 0; c < wypCartItems.length; c++) {
+            if (wypCartItems[c].sn === item.sn) { alreadyInCart = true; break; }
+          }
+          if (alreadyInCart) continue;
+        }
+
+        var displayName = simplifyName(item.nazwaWys) || item.nazwaWys;
+        var subtext = item.nazwaSys || '';
+        if (item.kategoria === 'E' && item.sn) {
+          subtext += ' | SN: ' + item.sn;
+        }
+
+        h += '<div class="picker-item" onclick="wypSelectToolIdx(' + i + ')">'
           + '<div>'
-          + '<div style="font-weight:bold;">' + esc(g.nazwaWys) + ' ' + getKategoriaBadge(g.kategoria) + '</div>'
-          + '<div style="font-size:13px;color:#636e72;">' + g.items.length + ' wariant(ów)</div>'
+          + '<div style="font-weight:bold;">' + esc(displayName) + ' ' + getKategoriaBadge(item.kategoria) + '</div>'
+          + (subtext ? '<div style="font-size:11px;color:#636e72;">' + esc(subtext) + '</div>' : '')
           + '</div>'
           + '<span class="status-badge status-available">'
-          + available + ' szt.'
+          + item.aktualnieNaStanie + ' szt.'
           + '</span>'
           + '</div>';
       }
       container.innerHTML = h;
     }
 
-    function wypSelectTool(nazwaWys) {
-      // Find the group
-      var group = null;
-      for (var i = 0; i < allKatalogGrouped.length; i++) {
-        if (allKatalogGrouped[i].nazwaWys === nazwaWys) { group = allKatalogGrouped[i]; break; }
-      }
-      if (!group) return;
-      currentSelectedGroup = group;
+    function wypSelectToolIdx(idx) {
+      var item = lastWypNarzFiltered[idx];
+      if (!item) return;
 
-      var kat = group.kategoria;
-
-      if (kat === 'E') {
-        var availableItems = group.items.filter(function (it) { return it.aktualnieNaStanie > 0 && it.sn; });
-
-        // Jeden dostępny egzemplarz — od razu do koszyka
-        if (availableItems.length === 1) {
-          document.getElementById('wypDynamicFields').style.display = 'none';
-          finishAddToCart(nazwaWys, availableItems[0].sn, 1, 'E', null);
-          return;
-        }
-
-        // Wiele egzemplarzy — pokaż wybór SN
-        if (availableItems.length === 0) {
-          toast('Brak dostępnych egzemplarzy', 'error');
-          return;
-        }
-
-        var panel = document.getElementById('wypDynamicFields');
-        var html = '<div class="dynamic-fields">';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
-        html += '<span style="font-weight:bold;font-size:16px;">' + esc(nazwaWys) + ' ' + getKategoriaBadge(kat) + '</span>';
-        html += '<span onclick="document.getElementById(\'wypDynamicFields\').style.display=\'none\'" style="cursor:pointer;font-size:22px;color:#636e72;padding:0 4px;">&times;</span>';
-        html += '</div>';
-        html += '<label>Wybierz egzemplarz (SN):</label>';
-        html += '<select id="wypSNSelect">';
-        for (var j = 0; j < availableItems.length; j++) {
-          html += '<option value="' + esc(availableItems[j].sn) + '">' + esc(simplifyName(availableItems[j].nazwaSys) || availableItems[j].nazwaSys) + ' (SN: ' + esc(availableItems[j].sn) + ')</option>';
-        }
-        html += '</select>';
-        html += '<button class="btn btn-primary" onclick="wypAddSNToCart()" style="height:50px;font-size:15px;margin-top:15px;">Dodaj do koszyka</button>';
-        html += '</div>';
-        panel.innerHTML = html;
-        panel.style.display = 'block';
-      } else {
-        // N / Z — od razu do koszyka (qty=1)
-        document.getElementById('wypDynamicFields').style.display = 'none';
-        finishAddToCart(nazwaWys, '', 1, kat, null);
-      }
-    }
-
-    function wypAddSNToCart() {
-      if (!currentSelectedGroup) return;
-      var snSelect = document.getElementById('wypSNSelect');
-      var sn = snSelect ? snSelect.value : '';
-      if (!sn) { toast('Wybierz egzemplarz (SN)', 'error'); return; }
-      finishAddToCart(currentSelectedGroup.nazwaWys, sn, 1, 'E', null);
-    }
-
-    function finishAddToCart(nazwaWys, sn, qty, kategoria, photoBase64) {
-      var group = currentSelectedGroup;
-      var maxAvailable = group.totalStock;
-      for (var c = 0; c < wypCartItems.length; c++) {
-        if (wypCartItems[c].nazwaWys === nazwaWys) maxAvailable -= wypCartItems[c].qty;
-      }
-
-      if (qty > maxAvailable) {
-        toast('Nie ma tyle na stanie (max: ' + maxAvailable + ')', 'error');
-        return;
-      }
+      var nazwaWys = item.nazwaWys;
+      var kat = item.kategoria;
+      var sn = (kat === 'E') ? (item.sn || '') : '';
 
       // E z SN — sprawdź duplikat
       if (sn) {
         for (var i = 0; i < wypCartItems.length; i++) {
           if (wypCartItems[i].sn === sn) {
-            toast('Ten egzemplarz (SN) jest już w koszyku', 'error');
+            toast('Ten egzemplarz jest już w koszyku', 'error');
             return;
           }
         }
       }
 
-      // N/Z bez SN — zwiększ ilość jeśli już jest w koszyku
-      if (!sn && kategoria !== 'E') {
+      // N/Z — zwiększ ilość jeśli już jest w koszyku
+      if (!sn && kat !== 'E') {
         for (var j = 0; j < wypCartItems.length; j++) {
           if (wypCartItems[j].nazwaWys === nazwaWys && !wypCartItems[j].sn) {
-            wypCartItems[j].qty += qty;
-            document.getElementById('wypDynamicFields').style.display = 'none';
-            currentSelectedGroup = null;
+            wypCartItems[j].qty += 1;
             renderWypCart();
-            renderWypNarzList(getFilteredGrouped());
+            renderWypNarzList(wypFilteredList());
             document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
             renderWypLastAdded();
-            toast('Zwiększono ilość: ' + nazwaWys, 'success');
+            toast('Zwiększono ilość: ' + (simplifyName(nazwaWys) || nazwaWys), 'success');
             return;
           }
         }
@@ -2517,35 +2458,35 @@
       wypCartItems.push({
         nazwaWys: nazwaWys,
         sn: sn,
-        qty: qty,
-        max: group.totalStock,
-        kategoria: kategoria,
-        flaga: group.flaga || false,
-        photoBase64: photoBase64
+        qty: 1,
+        max: item.aktualnieNaStanie,
+        kategoria: kat,
+        flaga: item.flaga || false,
+        photoBase64: null
       });
 
-      document.getElementById('wypDynamicFields').style.display = 'none';
-      currentSelectedGroup = null;
       renderWypCart();
-      renderWypNarzList(getFilteredGrouped());
-      toast('Dodano do koszyka: ' + nazwaWys, 'success');
-
-      // Pokaż ostatnio dodaną pozycję pod listą narzędzi
+      renderWypNarzList(wypFilteredList());
+      toast('Dodano: ' + (simplifyName(nazwaWys) || nazwaWys) + (sn ? ' (SN:' + sn + ')' : ''), 'success');
       renderWypLastAdded();
     }
 
-    function filterWypNarz() {
+    function wypFilteredList() {
       var q = document.getElementById('wypNarzSearch').value;
-      var list = document.getElementById('wypNarzList');
-      if (list) list.scrollTop = 0;
-      var filtered = allKatalogGrouped;
+      var filtered = allKatalog;
       if (currentWypKategoria !== 'all') {
         filtered = filtered.filter(function (n) { return n.kategoria === currentWypKategoria; });
       }
       if (q) {
-        filtered = scoredSearch(filtered, ['nazwaWys', 'kategoria'], q);
+        filtered = scoredSearch(filtered, ['nazwaSys', 'nazwaWys', 'kategoria', 'sn'], q);
       }
-      renderWypNarzList(filtered);
+      return filtered;
+    }
+
+    function filterWypNarz() {
+      var list = document.getElementById('wypNarzList');
+      if (list) list.scrollTop = 0;
+      renderWypNarzList(wypFilteredList());
     }
 
     function filterWypKategoria(kat, btn) {
@@ -2556,15 +2497,7 @@
     }
 
     function getFilteredGrouped() {
-      var q = document.getElementById('wypNarzSearch').value;
-      var filtered = allKatalogGrouped;
-      if (currentWypKategoria !== 'all') {
-        filtered = filtered.filter(function (n) { return n.kategoria === currentWypKategoria; });
-      }
-      if (q) {
-        filtered = scoredSearch(filtered, ['nazwaWys', 'kategoria'], q);
-      }
-      return filtered;
+      return wypFilteredList();
     }
 
     function renderWypLastAdded() {
