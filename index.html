@@ -993,6 +993,22 @@
       <div id="dmTable" style="overflow-x:auto;"></div>
       <div id="dmPager" style="display:flex;gap:8px;justify-content:center;margin-top:8px;"></div>
     </div>
+
+    <!-- DANE LOKALNE — BACKUP / SYNC -->
+    <div style="margin-top:20px;border-top:1px solid #e0e0e0;padding-top:16px;">
+      <div style="font-size:13px;font-weight:bold;color:#636e72;margin-bottom:8px;text-transform:uppercase;">Dane lokalne (przeglądarka)</div>
+      <div id="backupSyncStatus" style="font-size:12px;color:#636e72;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="exportLocalData()" style="height:44px;font-size:13px;margin:0;padding:0 14px;flex:1;min-width:120px;">💾 Eksportuj JSON</button>
+        <button class="btn btn-success" onclick="syncLocalToCloud()" style="height:44px;font-size:13px;margin:0;padding:0 14px;flex:1;min-width:120px;">☁️ Sync do chmury</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn" onclick="importLocalData()" style="height:44px;font-size:13px;margin:0;padding:0 14px;flex:1;min-width:120px;background:#7c3aed;color:#fff;">📥 Importuj z pliku</button>
+        <button class="btn" onclick="restoreFromCloud()" style="height:44px;font-size:13px;margin:0;padding:0 14px;flex:1;min-width:120px;background:#d97706;color:#fff;">☁️ Przywróć z chmury</button>
+      </div>
+      <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="handleImportFile(event)">
+      <div id="backupDetails" style="margin-top:8px;font-size:12px;color:#636e72;"></div>
+    </div>
   </div>
 
   <!-- TAB: INWENTARYZACJA -->
@@ -1232,8 +1248,8 @@
         class="nav-icon">🔧</span><span>Katalog</span></button>
     <button class="nav-btn" data-tab="raporty" onclick="switchTab('raporty', this)"><span
         class="nav-icon">📊</span><span>Raporty</span></button>
-    <button class="nav-btn" data-tab="inwentaryzacja" onclick="switchTab('inwentaryzacja', this)"><span
-        class="nav-icon">📸</span><span>Inwent.</span></button>
+    <!-- <button class="nav-btn" data-tab="inwentaryzacja" onclick="switchTab('inwentaryzacja', this)"><span
+        class="nav-icon">📸</span><span>Inwent.</span></button> -->
   </div>
 
   <!-- MODAL: DODAJ OSOBĘ -->
@@ -1248,6 +1264,12 @@
       <label class="form-label">Numer telefonu</label>
       <input type="tel" class="form-input" id="newOsobaTel" placeholder="np. 600 123 456">
       <button class="btn btn-primary" onclick="addOsoba()">Zapisz osobę</button>
+      <div style="border-top:1px solid #e0e0e0;margin-top:16px;padding-top:16px;">
+        <div style="font-size:13px;font-weight:bold;color:#636e72;margin-bottom:8px;">Importuj wiele osób</div>
+        <textarea id="importOsobyText" class="form-input" rows="6" placeholder="Wklej osoby — jedna na linię, np:&#10;Jan Kowalski&#10;Anna Nowak, 600123456&#10;Piotr Wiśniewski" style="font-size:14px;resize:vertical;"></textarea>
+        <button class="btn btn-success" onclick="bulkImportOsoby()" style="margin-top:8px;">📋 Importuj listę</button>
+        <div id="importOsobyResult" style="font-size:12px;color:#636e72;margin-top:6px;"></div>
+      </div>
     </div>
   </div>
 
@@ -2188,6 +2210,43 @@
           toast("Błąd: " + err.message, "error");
         })
         .addOsoba(imie, telefon);
+    }
+
+    function bulkImportOsoby() {
+      var text = document.getElementById('importOsobyText').value.trim();
+      if (!text) { toast('Wklej listę osób', 'error'); return; }
+
+      var lines = text.split(/\n/).filter(function(l) { return l.trim(); });
+      var lista = lines.map(function(line) {
+        var parts = line.split(/[,;\t]/).map(function(s) { return s.trim(); });
+        return { imie: parts[0] || '', telefon: parts[1] || '' };
+      }).filter(function(o) { return o.imie; });
+
+      if (!lista.length) { toast('Nie znaleziono osób do importu', 'error'); return; }
+
+      var resultEl = document.getElementById('importOsobyResult');
+      resultEl.textContent = 'Importuję ' + lista.length + ' osób...';
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          hideLoading();
+          if (res && res.success) {
+            resultEl.textContent = 'Dodano: ' + res.added + ', pominięto (duplikaty): ' + res.skipped;
+            toast('Import zakończony: ' + res.added + ' dodanych', 'success');
+            document.getElementById('importOsobyText').value = '';
+            loadOsoby();
+          } else {
+            resultEl.textContent = 'Błąd importu';
+            toast('Błąd importu', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          resultEl.textContent = 'Błąd: ' + err.message;
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .importOsoby(lista);
     }
 
     /* =========================
@@ -4993,10 +5052,230 @@
     }
 
     /* =========================
+       LOCAL DATA BACKUP / SYNC
+    ========================= */
+
+    function gatherLocalData() {
+      return new Promise(function(resolve) {
+        var payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          localStorage: {
+            magazyn_operator: localStorage.getItem('magazyn_operator') || '',
+            invOsoba: localStorage.getItem('invOsoba') || '',
+            invHidden: (function(){ try { return JSON.parse(localStorage.getItem('invHidden') || '[]'); } catch(e) { return []; } })()
+          },
+          indexedDB: { scans: [] }
+        };
+        invDbGetAll(function(scans) {
+          payload.indexedDB.scans = scans.map(function(s) {
+            return { id: s.id, thumb: s.thumb, status: s.status, timestamp: s.timestamp };
+            // NOTE: base64 excluded from cloud sync (too large) — included in JSON export
+          });
+          resolve(payload);
+        });
+      });
+    }
+
+    function gatherLocalDataFull() {
+      return new Promise(function(resolve) {
+        var payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          localStorage: {
+            magazyn_operator: localStorage.getItem('magazyn_operator') || '',
+            invOsoba: localStorage.getItem('invOsoba') || '',
+            invHidden: (function(){ try { return JSON.parse(localStorage.getItem('invHidden') || '[]'); } catch(e) { return []; } })()
+          },
+          indexedDB: { scans: [] }
+        };
+        invDbGetAll(function(scans) {
+          // Full export includes base64 images
+          payload.indexedDB.scans = scans;
+          resolve(payload);
+        });
+      });
+    }
+
+    function exportLocalData() {
+      var btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Eksportuję...';
+      gatherLocalDataFull().then(function(payload) {
+        var json = JSON.stringify(payload, null, 2);
+        var blob = new Blob([json], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'magazyn-backup-' + new Date().toISOString().slice(0,10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        btn.disabled = false;
+        btn.textContent = '💾 Eksportuj JSON';
+        toast('Dane wyeksportowane do pliku JSON', 'success');
+        updateBackupStatus('Eksport: ' + new Date().toLocaleTimeString());
+      });
+    }
+
+    function syncLocalToCloud() {
+      var btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Synchronizuję...';
+      gatherLocalData().then(function(payload) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            btn.disabled = false;
+            btn.textContent = '☁️ Sync do chmury';
+            if (result && result.success) {
+              toast('Dane zsynchronizowane z chmurą', 'success');
+              updateBackupStatus('Sync: ' + new Date().toLocaleTimeString());
+              localStorage.setItem('lastCloudSync', new Date().toISOString());
+            } else {
+              toast('Błąd synchronizacji', 'error');
+            }
+          })
+          .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btn.textContent = '☁️ Sync do chmury';
+            toast('Błąd: ' + (err.message || err), 'error');
+          })
+          .saveLocalBackup({
+            operator: currentOperator,
+            type: 'manual',
+            payload: payload
+          });
+      });
+    }
+
+    function importLocalData() {
+      document.getElementById('importFileInput').click();
+    }
+
+    function handleImportFile(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var data = JSON.parse(e.target.result);
+          if (!data.version || !data.localStorage) {
+            toast('Nieprawidłowy plik backupu', 'error');
+            return;
+          }
+          if (!confirm('Przywrócić dane z pliku ' + file.name + '?\nTo nadpisze aktualne dane lokalne.')) return;
+          restorePayload(data);
+        } catch(err) {
+          toast('Błąd odczytu pliku: ' + err.message, 'error');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function restoreFromCloud() {
+      var btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Pobieranie...';
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.textContent = '☁️ Przywróć z chmury';
+          if (!result || !result.success) {
+            toast(result ? result.message : 'Brak backupów', 'error');
+            return;
+          }
+          var ts = result.timestamp;
+          if (!confirm('Przywrócić dane z chmury?\nBackup z: ' + ts + '\nOperator: ' + result.operator + '\nTo nadpisze aktualne dane lokalne.')) return;
+          restorePayload(result.payload);
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.textContent = '☁️ Przywróć z chmury';
+          toast('Błąd: ' + (err.message || err), 'error');
+        })
+        .getLocalBackup();
+    }
+
+    function restorePayload(payload) {
+      // Restore localStorage
+      if (payload.localStorage) {
+        if (payload.localStorage.magazyn_operator) {
+          localStorage.setItem('magazyn_operator', payload.localStorage.magazyn_operator);
+          currentOperator = payload.localStorage.magazyn_operator;
+          updateOperatorBtn();
+        }
+        if (payload.localStorage.invOsoba) {
+          localStorage.setItem('invOsoba', payload.localStorage.invOsoba);
+        }
+        if (payload.localStorage.invHidden) {
+          localStorage.setItem('invHidden', JSON.stringify(payload.localStorage.invHidden));
+        }
+      }
+
+      // Restore IndexedDB scans (if present with base64)
+      if (payload.indexedDB && payload.indexedDB.scans && payload.indexedDB.scans.length) {
+        var scansWithData = payload.indexedDB.scans.filter(function(s) { return s.base64; });
+        if (scansWithData.length) {
+          var restored = 0;
+          scansWithData.forEach(function(scan) {
+            invDbSave(scan, function() {
+              restored++;
+              if (restored === scansWithData.length) {
+                toast('Przywrócono ' + restored + ' skanów z backupu', 'success');
+              }
+            });
+          });
+        } else {
+          toast('Dane localStorage przywrócone (brak skanów z obrazami)', 'success');
+        }
+      } else {
+        toast('Dane localStorage przywrócone', 'success');
+      }
+      updateBackupStatus('Przywrócono: ' + new Date().toLocaleTimeString());
+    }
+
+    function updateBackupStatus(msg) {
+      var el = document.getElementById('backupSyncStatus');
+      if (el) el.textContent = msg;
+    }
+
+    // Auto-sync: co 10 min jeśli jest operator
+    var autoSyncInterval = null;
+    function startAutoSync() {
+      if (autoSyncInterval) return;
+      autoSyncInterval = setInterval(function() {
+        if (!currentOperator) return;
+        gatherLocalData().then(function(payload) {
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result && result.success) {
+                updateBackupStatus('Auto-sync: ' + new Date().toLocaleTimeString());
+                localStorage.setItem('lastCloudSync', new Date().toISOString());
+              }
+            })
+            .saveLocalBackup({
+              operator: currentOperator,
+              type: 'auto',
+              payload: payload
+            });
+        });
+      }, 10 * 60 * 1000); // 10 minut
+    }
+
+    /* =========================
        INIT
     ========================= */
     window.addEventListener("load", function () {
       preload();
+      // Start auto-sync po załadowaniu
+      setTimeout(startAutoSync, 5000);
+      // Show last sync time
+      var lastSync = localStorage.getItem('lastCloudSync');
+      if (lastSync) {
+        updateBackupStatus('Ostatni sync: ' + new Date(lastSync).toLocaleString());
+      }
     });
   </script>
 

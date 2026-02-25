@@ -4,7 +4,7 @@
 // ============================================
 
 const CACHE_TTL = 60 * 5;
-const SPREADSHEET_ID = '1OCm_8VZ1Q-z1sXGsthJKUgHS_H13rdXa9uzGKdNrc6A';
+const SPREADSHEET_ID = '1bGjJ4NYfrdtKcqX2GIWIheo_KQQHdhH6keDurrZEHxM';
 
 const SHEET_KATALOG = "Katalog";
 const SHEET_OSOBY = "Osoby";
@@ -42,6 +42,53 @@ const COLS_PRZES = {
   OPIS_USZKODZENIA: 11,
   OPERATOR: 12
 };
+
+// ============================================
+// SETUP — uruchom raz z edytora skryptów
+// ============================================
+
+function createNewDatabase() {
+  var ss = SpreadsheetApp.create('Magazyn Wypożyczalnia - Baza');
+  var id = ss.getId();
+
+  // Katalog
+  var kat = ss.getSheets()[0];
+  kat.setName(SHEET_KATALOG);
+  kat.appendRow(['ID', 'Nazwa Systemowa', 'Nazwa Wyświetlana', 'Kategoria', 'S/N', 'Stan Początkowy', 'Aktualnie Na Stanie', 'Flaga', 'Tagi']);
+  kat.setFrozenRows(1);
+  kat.getRange('1:1').setFontWeight('bold');
+
+  // Osoby
+  var os = ss.insertSheet(SHEET_OSOBY);
+  os.appendRow(['ID', 'Imię i Nazwisko', 'Telefon']);
+  os.setFrozenRows(1);
+  os.getRange('1:1').setFontWeight('bold');
+
+  // Przesunięcia
+  var prz = ss.insertSheet(SHEET_PRZESUNIECIA);
+  prz.appendRow(['ID Operacji', 'Data Wydania', 'Osoba', 'Nazwa Systemowa', 'S/N', 'Ilość', 'Kategoria', 'Status', 'Zdjęcie Wydanie URL', 'Zdjęcie Zwrot URL', 'Data Zwrotu', 'Opis Uszkodzenia', 'Operator']);
+  prz.setFrozenRows(1);
+  prz.getRange('1:1').setFontWeight('bold');
+
+  // Inwentaryzacja
+  ss.insertSheet(SHEET_INWENTARYZACJA);
+  ss.insertSheet(SHEET_INV_DOSTAWA);
+  ss.insertSheet(SHEET_INV_WYNIKI);
+  ss.insertSheet(SHEET_INV_BRAKI);
+
+  // LocalBackup
+  var bk = ss.insertSheet(SHEET_LOCAL_BACKUP);
+  bk.appendRow(['Timestamp', 'Operator', 'Type', 'Data_JSON']);
+  bk.setFrozenRows(1);
+  bk.getRange('1:1').setFontWeight('bold');
+
+  Logger.log('=== NOWY ARKUSZ UTWORZONY ===');
+  Logger.log('ID: ' + id);
+  Logger.log('URL: ' + ss.getUrl());
+  Logger.log('Skopiuj ID powyżej i wklej do SPREADSHEET_ID w Kod.js');
+
+  return { id: id, url: ss.getUrl() };
+}
 
 // ============================================
 // SYSTEM
@@ -188,6 +235,39 @@ function addOsoba(imie, telefon) {
   sheet.appendRow([id, imie.trim(), telefon.trim()]);
   CacheService.getScriptCache().remove("osoby");
   return { success: true, id: id };
+}
+
+function importOsoby(lista) {
+  // lista = [{imie: "Jan Kowalski", telefon: "600123456"}, ...]
+  var sheet = getSheet(SHEET_OSOBY);
+  var lastRow = sheet.getLastRow();
+  var existing = {};
+  if (lastRow >= 2) {
+    var data = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < data.length; i++) {
+      existing[String(data[i][0]).trim().toLowerCase()] = true;
+    }
+  }
+
+  var added = 0, skipped = 0;
+  var rows = [];
+  for (var j = 0; j < lista.length; j++) {
+    var name = String(lista[j].imie || '').trim();
+    if (!name) continue;
+    var key = name.toLowerCase();
+    if (existing[key]) { skipped++; continue; }
+    existing[key] = true;
+    var tel = String(lista[j].telefon || '').trim();
+    rows.push([generateId('OS'), name, tel]);
+    added++;
+  }
+
+  if (rows.length) {
+    sheet.getRange(lastRow + 1, 1, rows.length, 3).setValues(rows);
+  }
+
+  CacheService.getScriptCache().remove("osoby");
+  return { success: true, added: added, skipped: skipped };
 }
 
 // ============================================
@@ -2123,4 +2203,85 @@ function migrateKategorie() {
 
   CacheService.getScriptCache().remove("katalog");
   return { success: true, changed: changed };
+}
+
+// ============================================
+// LOCAL DATA BACKUP / SYNC
+// ============================================
+
+const SHEET_LOCAL_BACKUP = "LocalBackup";
+
+function saveLocalBackup(data) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_LOCAL_BACKUP);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LOCAL_BACKUP);
+    sheet.appendRow(['Timestamp', 'Operator', 'Type', 'Data_JSON']);
+    sheet.setFrozenRows(1);
+    sheet.getRange('1:1').setFontWeight('bold');
+  }
+
+  var timestamp = new Date().toISOString();
+  var operator = data.operator || 'unknown';
+  var type = data.type || 'manual'; // manual | auto
+  var jsonStr = JSON.stringify(data.payload);
+
+  sheet.appendRow([timestamp, operator, type, jsonStr]);
+
+  // Keep max 50 backups — remove oldest
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 51) {
+    sheet.deleteRows(2, lastRow - 51);
+  }
+
+  return { success: true, timestamp: timestamp };
+}
+
+function getLocalBackup() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_LOCAL_BACKUP);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { success: false, message: 'Brak backupów' };
+  }
+
+  var lastRow = sheet.getLastRow();
+  var row = sheet.getRange(lastRow, 1, 1, 4).getValues()[0];
+
+  return {
+    success: true,
+    timestamp: row[0],
+    operator: row[1],
+    type: row[2],
+    payload: JSON.parse(row[3])
+  };
+}
+
+function getLocalBackupList() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_LOCAL_BACKUP);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { success: true, backups: [] };
+  }
+
+  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  var list = data.map(function(r, i) {
+    return { index: i + 2, timestamp: r[0], operator: r[1], type: r[2] };
+  }).reverse();
+
+  return { success: true, backups: list.slice(0, 20) };
+}
+
+function getLocalBackupByRow(rowIndex) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_LOCAL_BACKUP);
+  if (!sheet) return { success: false };
+
+  var row = sheet.getRange(rowIndex, 1, 1, 4).getValues()[0];
+  return {
+    success: true,
+    timestamp: row[0],
+    operator: row[1],
+    type: row[2],
+    payload: JSON.parse(row[3])
+  };
 }
