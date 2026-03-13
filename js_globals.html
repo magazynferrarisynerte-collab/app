@@ -1,0 +1,710 @@
+<script>
+    /* =========================
+       ZMIENNE GLOBALNE
+    ========================= */
+    var allOsoby = [];
+    var allKatalog = [];
+    var allKatalogGrouped = [];
+    var allLogEntries = [];
+    var summaryData = [];
+    var lastWypNarzFiltered = [];
+
+    var currentOperator = localStorage.getItem('magazyn_operator') || '';
+
+    var wypOsobaId = null;
+    var wypOsobaName = '';
+    var wypCartItems = [];
+    var currentSelectedGroup = null; // currently selected tool group in dynamic fields
+
+    var damageNazwaSys = '', damageSN = '';
+
+    /* =========================
+       POMOCNICZE
+    ========================= */
+    var currentLogFilter = 'active';
+    var currentNarzKategoria = 'all';
+    var currentWypKategoria = 'all';
+    var returnCartIds = [];
+    var returnCartQty = {};
+    var currentDetailOsoba = null;
+    var currentReturnOpId = null;
+
+    var KATEGORIE = {
+      'E': { label: 'Ewidencjonowane', color: '#8b5cf6', bg: '#ede9fe' },
+      'N': { label: 'Nieewidencjonowane', color: '#3b82f6', bg: '#dbeafe' },
+      'Z': { label: 'Zużywalne', color: '#f59e0b', bg: '#fef3c7' }
+    };
+
+    var STATUS_STYLES = {
+      'Wydane': { cls: 'status-borrowed', label: 'WYDANE' },
+      'Zwrocone': { cls: 'status-returned', label: 'ZWRÓCONE' },
+      'Zuzyte': { cls: 'status-consumed', label: 'ZUŻYTE' },
+      'Uszkodzone': { cls: 'status-damaged', label: 'USZKODZONE' }
+    };
+
+    function getKategoriaBadge(kat) {
+      var k = KATEGORIE[kat];
+      if (!k) return '';
+      return '<span style="background:' + k.bg + ';color:' + k.color + ';padding:2px 6px;border-radius:6px;font-size:11px;font-weight:bold;">' + kat + '</span>';
+    }
+
+    function getStatusBadge(status) {
+      var s = STATUS_STYLES[status];
+      if (!s) return '<span class="status-badge">' + esc(status) + '</span>';
+      return '<span class="status-badge ' + s.cls + '">' + s.label + '</span>';
+    }
+
+    var currentDetailActive = [];
+
+    function goToOsoba(imie) {
+      // Znajdź osobę po imieniu i otwórz jej detal
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].imie === imie) {
+          // Przełącz na zakładkę Osoby
+          var btn = document.querySelectorAll('.nav-btn')[1];
+          switchTab('tabOsoby', btn);
+          openOsobaDetail(allOsoby[i].id);
+          return;
+        }
+      }
+    }
+
+    function openOsobaDetail(idOsoby) {
+      returnCartIds = [];
+      returnCartQty = {};
+      currentDetailOsoba = null;
+      currentDetailActive = [];
+
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].id === idOsoby) { currentDetailOsoba = allOsoby[i]; break; }
+      }
+      if (!currentDetailOsoba) return;
+
+      document.getElementById('osobaDetailTitle').textContent = currentDetailOsoba.imie;
+      var infoHtml = '<b>' + esc(currentDetailOsoba.imie) + '</b>';
+      if (currentDetailOsoba.telefon) infoHtml += '<br><span style="color:#667eea;">' + esc(currentDetailOsoba.telefon) + '</span>';
+      if (currentDetailOsoba.lokalizacja) {
+        if (isAnyListType(currentDetailOsoba.imie)) {
+          infoHtml += '<br><span style="font-size:12px;color:#636e72;font-style:italic;">' + esc(currentDetailOsoba.lokalizacja) + '</span>';
+        } else {
+          infoHtml += '<br><span style="font-size:12px;color:#636e72;">&#128205; ' + esc(currentDetailOsoba.lokalizacja) + '</span>';
+        }
+      }
+      if (currentDetailOsoba.email) infoHtml += '<br><span style="font-size:12px;color:#636e72;">&#9993; ' + esc(currentDetailOsoba.email) + '</span>';
+      document.getElementById('osobaDetailInfo').innerHTML = infoHtml;
+
+      currentDetailActive = allLogEntries.filter(function (e) {
+        return e.osoba === currentDetailOsoba.imie && (e.status === 'Wydane' || e.status === 'Uszkodzone');
+      });
+
+      var hasPhone = currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
+      var isList = isAnyListType(currentDetailOsoba.imie);
+      document.getElementById('osobaWhatsStanBtn').style.display = (hasPhone && currentDetailActive.length > 0 && !isList) ? 'flex' : 'none';
+      document.getElementById('listaActions').style.display = isList ? 'block' : 'none';
+      document.getElementById('searchOsobaWyp').value = '';
+      renderOsobaWypList(currentDetailActive);
+      openModal('modalOsobaDetail');
+    }
+
+    function renderOsobaWypList(data) {
+      var container = document.getElementById('osobaWypList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak aktywnych wypożyczeń</div>';
+        document.getElementById('returnCartBar').classList.remove('show');
+        return;
+      }
+      var isCommentList = currentDetailOsoba && currentDetailOsoba.imie && (currentDetailOsoba.imie.indexOf('[Robocza]') === 0 || isZamowieniaType(currentDetailOsoba.imie));
+      var isEditableList = currentDetailOsoba && currentDetailOsoba.imie && isAnyListType(currentDetailOsoba.imie);
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var e = data[i];
+        var detailName = resolveNazwa(e.nazwaSys);
+        var isChecked = returnCartIds.indexOf(e.idOp) !== -1;
+        var rqty = returnCartQty[e.idOp] || e.ilosc;
+        var isDmg = e.opisUszkodzenia && e.opisUszkodzenia.trim().length > 0;
+        var itemStyle = isDmg ? 'cursor:pointer;padding:8px 10px;margin-bottom:3px;border-radius:10px;border-left:3px solid #ef4444;background:#fef2f2;' : 'cursor:pointer;padding:8px 10px;margin-bottom:3px;border-radius:10px;';
+        h += '<div class="cart-item" style="' + itemStyle + '" onclick="toggleReturnCart(\'' + esc(e.idOp) + '\',this)">'
+          + '<input type="checkbox" class="wyp-item-check" style="width:20px;height:20px;" data-id="' + esc(e.idOp) + '"' + (isChecked ? ' checked' : '') + '>'
+          + '<div style="flex:1;margin-left:8px;">'
+          + '<b onclick="event.stopPropagation();openItemDetail(\'' + esc(e.nazwaSys) + '\')" style="font-size:13px;cursor:pointer;color:' + (isDmg ? '#ef4444' : '#2d3436') + ';">' + esc(detailName) + (isEditableList ? '' : (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '')) + '</b>'
+          + (e.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
+          + ' <span style="font-size:11px;color:#636e72;">' + esc(e.dataWydania) + '</span> ' + getKategoriaBadge(e.kategoria);
+        if (isDmg) {
+          h += '<div style="font-size:11px;color:#ef4444;margin-top:2px;font-weight:600;">⚠ Uszkodzenie: ' + esc(e.opisUszkodzenia) + '</div>';
+        }
+        if (isCommentList) {
+          h += '<div onclick="event.stopPropagation();openRoboczaComment(\'' + esc(e.idOp) + '\',\'' + esc(detailName).replace(/'/g, "\\'") + '\')" style="font-size:11px;color:#0891b2;margin-top:2px;cursor:pointer;text-decoration:underline;">✏ Dodaj komentarz</div>';
+        }
+        if (isEditableList) {
+          h += '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;margin-top:4px;">'
+            + '<span style="font-size:11px;color:#636e72;">Ilość:</span>'
+            + '<button onclick="changeListaQty(\'' + esc(e.idOp) + '\',-1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>'
+            + '<span id="lqty_' + esc(e.idOp) + '" style="font-size:14px;font-weight:bold;min-width:20px;text-align:center;">' + e.ilosc + '</span>'
+            + '<button onclick="changeListaQty(\'' + esc(e.idOp) + '\',1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>'
+            + '</div>';
+        }
+        if (e.ilosc > 1 && isChecked) {
+          h += '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;margin-top:4px;">'
+            + '<span style="font-size:11px;color:#636e72;">Zwrot:</span>'
+            + '<button onclick="changeReturnQty(\'' + esc(e.idOp) + '\',-1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">-</button>'
+            + '<span id="rqty_' + esc(e.idOp) + '" style="font-size:14px;font-weight:bold;min-width:20px;text-align:center;">' + rqty + '</span>'
+            + '<button onclick="changeReturnQty(\'' + esc(e.idOp) + '\',1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>'
+            + '<span style="font-size:11px;color:#636e72;">/ ' + e.ilosc + '</span>'
+            + '</div>';
+        }
+        h += '</div></div>';
+      }
+      container.innerHTML = h;
+      document.getElementById('returnCartBar').classList.add('show');
+      updateReturnCart();
+    }
+
+    var _listaQtyTimers = {};
+    function changeListaQty(idOp, delta) {
+      for (var i = 0; i < allLogEntries.length; i++) {
+        if (allLogEntries[i].idOp === idOp) {
+          var newQty = (allLogEntries[i].ilosc || 1) + delta;
+          if (newQty < 1) return;
+          allLogEntries[i].ilosc = newQty;
+          var span = document.getElementById('lqty_' + idOp);
+          if (span) span.textContent = newQty;
+          if (_listaQtyTimers[idOp]) clearTimeout(_listaQtyTimers[idOp]);
+          var finalQty = newQty;
+          _listaQtyTimers[idOp] = setTimeout(function() {
+            delete _listaQtyTimers[idOp];
+            google.script.run
+              .withSuccessHandler(function(res) {
+                if (!res || !res.success) {
+                  toast('Błąd zapisu ilości', 'error');
+                  loadLogBackground();
+                }
+              })
+              .withFailureHandler(function(err) {
+                toast('Błąd: ' + err.message, 'error');
+                loadLogBackground();
+              })
+              .updateListaQty(idOp, finalQty);
+          }, 800);
+          return;
+        }
+      }
+    }
+
+    var roboczaCommentOpId = '';
+    function openRoboczaComment(idOp, nazwa) {
+      roboczaCommentOpId = idOp;
+      document.getElementById('roboczaCommentTitle').textContent = nazwa;
+      // Find existing comment
+      var existing = '';
+      for (var i = 0; i < allLogEntries.length; i++) {
+        if (allLogEntries[i].idOp === idOp) {
+          existing = allLogEntries[i].opisUszkodzenia || '';
+          break;
+        }
+      }
+      document.getElementById('roboczaCommentText').value = existing;
+      openModal('modalRoboczaComment');
+    }
+
+    function saveRoboczaComment() {
+      var comment = document.getElementById('roboczaCommentText').value.trim();
+      if (!roboczaCommentOpId) return;
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(res) {
+          hideLoading();
+          if (res && res.success) {
+            toast('Komentarz zapisany', 'success');
+            closeModal('modalRoboczaComment');
+            // Update local data
+            for (var i = 0; i < allLogEntries.length; i++) {
+              if (allLogEntries[i].idOp === roboczaCommentOpId) {
+                allLogEntries[i].opisUszkodzenia = comment;
+                break;
+              }
+            }
+            renderOsobaWypList(currentDetailActive);
+          } else {
+            toast('Błąd zapisu', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .updateOpisUszkodzenia(roboczaCommentOpId, comment);
+    }
+
+    function filterOsobaWyp() {
+      var q = document.getElementById('searchOsobaWyp').value;
+      if (!q) { renderOsobaWypList(currentDetailActive); return; }
+      renderOsobaWypList(scoredSearch(currentDetailActive, ['nazwaSys', 'nazwaWys', 'sn'], q));
+    }
+
+    function buildWhatsAppUrl(phone, message) {
+      var clean = phone.replace(/[^0-9]/g, '');
+      if (clean.length === 9) clean = '48' + clean;
+      return 'https://wa.me/' + clean + '?text=' + encodeURIComponent(message);
+    }
+
+    function sendWhatsAppStan() {
+      if (!currentDetailOsoba || !currentDetailOsoba.telefon) return;
+      var active = allLogEntries.filter(function (e) {
+        return e.osoba === currentDetailOsoba.imie && (e.status === 'Wydane' || e.status === 'Uszkodzone');
+      });
+      if (!active.length) { toast('Brak aktywnych wypożyczeń', 'error'); return; }
+      var items = active.map(function (e) {
+        var prefix = e.status === 'Uszkodzone' ? '- [DMG] ' : '- ';
+        return prefix + resolveNazwa(e.nazwaSys) + (e.sn ? ' (SN: ' + e.sn + ')' : '') + (e.ilosc > 1 ? ' (x' + e.ilosc + ')' : '') + ' (' + e.dataWydania + ')';
+      });
+      var msg = 'Aktualny stan wypożyczeń (' + currentDetailOsoba.imie + '):\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+      window.open(buildWhatsAppUrl(currentDetailOsoba.telefon, msg), '_blank');
+    }
+
+    function sendWhatsAppReturn() {
+      if (!currentDetailOsoba || !returnCartIds.length) return;
+      var items = [];
+      for (var i = 0; i < returnCartIds.length; i++) {
+        for (var j = 0; j < allLogEntries.length; j++) {
+          if (allLogEntries[j].idOp === returnCartIds[i]) {
+            var e = allLogEntries[j];
+            var rq = returnCartQty[e.idOp] || e.ilosc;
+            items.push('- ' + resolveNazwa(e.nazwaSys) + (e.sn ? ' (SN: ' + e.sn + ')' : '') + (rq > 1 || rq < e.ilosc ? ' (x' + rq + (rq < e.ilosc ? '/' + e.ilosc : '') + ')' : ''));
+            break;
+          }
+        }
+      }
+      var msg = 'Potwierdzenie zwrotu narzędzi:\n' + items.join('\n') + '\n\nDziękujemy!';
+      window.open(buildWhatsAppUrl(currentDetailOsoba.telefon, msg), '_blank');
+    }
+
+    function sendWhatsAppWyp() {
+      if (!wypOsobaId || !wypCartItems.length) return;
+      var osoba = null;
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].id === wypOsobaId) { osoba = allOsoby[i]; break; }
+      }
+      if (!osoba || !osoba.telefon || !osoba.telefon.trim()) return;
+
+      var items = wypCartItems.map(function (c) {
+        return '- ' + c.nazwaWys + (c.qty > 1 ? ' (x' + c.qty + ')' : '') + (c.sn ? ' (SN: ' + c.sn + ')' : '');
+      });
+      var msg = 'Potwierdzenie wydania:\n' + items.join('\n') + '\n\nProszę o zwrot w ustalonym terminie.';
+      window.open(buildWhatsAppUrl(osoba.telefon, msg), '_blank');
+    }
+
+    function toggleSelectAll() {
+      var allSelected = returnCartIds.length === currentDetailActive.length;
+      if (allSelected) {
+        returnCartIds = [];
+        returnCartQty = {};
+      } else {
+        returnCartIds = currentDetailActive.map(function (e) { return e.idOp; });
+        for (var k = 0; k < currentDetailActive.length; k++) {
+          returnCartQty[currentDetailActive[k].idOp] = currentDetailActive[k].ilosc;
+        }
+      }
+      renderOsobaWypList(currentDetailActive);
+    }
+
+    function transferSelected() {
+      if (!returnCartIds.length) { toast('Zaznacz pozycje do przekazania', 'error'); return; }
+      var osoby = allOsoby.filter(function (o) {
+        return !currentDetailOsoba || o.imie !== currentDetailOsoba.imie;
+      });
+      if (!osoby.length) { toast('Brak innych osób', 'error'); return; }
+
+      var panel = document.getElementById('osobaWypList');
+      var h = '<div style="background:#eef0ff;padding:10px 12px;border-radius:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+        + '<b style="font-size:14px;color:#667eea;">Przekaż ' + returnCartIds.length + ' poz. na:</b>'
+        + '<span onclick="renderOsobaWypList(currentDetailActive)" style="cursor:pointer;font-size:20px;color:#636e72;">&times;</span>'
+        + '</div>';
+      for (var i = 0; i < osoby.length; i++) {
+        h += '<div onclick="executeTransfer(\'' + esc(osoby[i].imie) + '\')" style="padding:10px 12px;background:white;border-radius:8px;margin-bottom:4px;cursor:pointer;font-size:14px;font-weight:bold;">'
+          + esc(osoby[i].imie) + '</div>';
+      }
+      h += '</div>';
+      panel.innerHTML = h;
+    }
+
+    function executeTransfer(nowaOsoba) {
+      var ids = returnCartIds.slice();
+      for (var i = 0; i < allLogEntries.length; i++) {
+        if (ids.indexOf(allLogEntries[i].idOp) !== -1) {
+          allLogEntries[i].osoba = nowaOsoba;
+        }
+      }
+      toast('Przekazano ' + ids.length + ' poz. → ' + nowaOsoba, 'success');
+      returnCartIds = [];
+      returnCartQty = {};
+      openOsobaDetail(currentDetailOsoba.id);
+
+      google.script.run
+        .withFailureHandler(function (err) { toast('Błąd: ' + err.message, 'error'); loadLogBackground(); })
+        .withSuccessHandler(function (res) {
+          if (!res.success) toast('Błąd: ' + res.error, 'error');
+          loadLogBackground();
+        })
+        .przeniesNaOsobe(ids, nowaOsoba, currentOperator);
+    }
+
+    function toggleReturnCart(idOp, el) {
+      var cb = el.querySelector('.wyp-item-check');
+      var idx = returnCartIds.indexOf(idOp);
+      if (idx === -1) {
+        returnCartIds.push(idOp);
+        cb.checked = true;
+        // Init qty to full amount
+        for (var k = 0; k < currentDetailActive.length; k++) {
+          if (currentDetailActive[k].idOp === idOp) {
+            returnCartQty[idOp] = currentDetailActive[k].ilosc;
+            break;
+          }
+        }
+      } else {
+        returnCartIds.splice(idx, 1);
+        cb.checked = false;
+        delete returnCartQty[idOp];
+      }
+      updateReturnCart();
+      renderOsobaWypList(currentDetailActive);
+    }
+
+    function changeReturnQty(idOp, delta) {
+      var maxQty = 1;
+      for (var k = 0; k < currentDetailActive.length; k++) {
+        if (currentDetailActive[k].idOp === idOp) { maxQty = currentDetailActive[k].ilosc; break; }
+      }
+      var cur = returnCartQty[idOp] || maxQty;
+      cur += delta;
+      if (cur < 1) cur = 1;
+      if (cur > maxQty) cur = maxQty;
+      returnCartQty[idOp] = cur;
+      var span = document.getElementById('rqty_' + idOp);
+      if (span) span.textContent = cur;
+    }
+
+    function updateReturnCart() {
+      document.getElementById('returnCartCount').textContent = returnCartIds.length;
+      document.getElementById('returnCartBtn').disabled = returnCartIds.length === 0;
+      var hasPhone = currentDetailOsoba && currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
+      document.getElementById('returnWhatsBtn').style.display = (hasPhone && returnCartIds.length > 0) ? 'inline-block' : 'none';
+    }
+
+    function returnCartSubmit() {
+      if (!returnCartIds.length) return;
+
+      // Check if any items are flagged or had issuance photos — collect return photos
+      var photoIds = [];
+      for (var i = 0; i < returnCartIds.length; i++) {
+        for (var j = 0; j < allLogEntries.length; j++) {
+          if (allLogEntries[j].idOp === returnCartIds[i]) {
+            var needPhoto = !!allLogEntries[j].zdjecieWydanieUrl;
+            if (!needPhoto) {
+              for (var fk = 0; fk < allKatalog.length; fk++) {
+                if (allKatalog[fk].nazwaSys === allLogEntries[j].nazwaSys && allKatalog[fk].flaga) {
+                  needPhoto = true; break;
+                }
+              }
+            }
+            if (needPhoto) photoIds.push(returnCartIds[i]);
+            break;
+          }
+        }
+      }
+
+      if (photoIds.length > 0) {
+        // Need return photos for items that had issuance photos
+        collectReturnPhotos(photoIds, 0, {});
+      } else {
+        executeReturnBatch(returnCartIds, {});
+      }
+    }
+
+    var pendingReturnIds = [];
+    var pendingReturnPhotos = {};
+
+    function collectReturnPhotos(photoIds, index, photoMap) {
+      if (index >= photoIds.length) {
+        executeReturnBatch(returnCartIds, photoMap);
+        return;
+      }
+      var idOp = photoIds[index];
+      var entry = null;
+      for (var j = 0; j < allLogEntries.length; j++) {
+        if (allLogEntries[j].idOp === idOp) { entry = allLogEntries[j]; break; }
+      }
+      pendingReturnIds = photoIds;
+      pendingReturnPhotos = photoMap;
+
+      document.getElementById('returnPhotoInfo').innerHTML =
+        '<b>' + esc(entry ? resolveNazwa(entry.nazwaSys) : '') + '</b>' +
+        (entry && entry.sn ? '<br>SN: ' + esc(entry.sn) : '') +
+        '<br><span style="font-size:13px;">Zdjęcie ' + (index + 1) + ' z ' + photoIds.length + '</span>';
+      document.getElementById('returnPhotoInput').value = '';
+      document.getElementById('returnPhotoPreview').innerHTML = '';
+      currentReturnOpId = idOp;
+      document.getElementById('modalReturnPhoto').setAttribute('data-batch-index', index);
+      document.getElementById('modalReturnPhoto').setAttribute('data-batch-mode', 'true');
+      openModal('modalReturnPhoto');
+    }
+
+    function executeReturnBatch(ids, photoMap) {
+      document.getElementById('returnCartBtn').disabled = true;
+      document.getElementById('returnCartBtn').textContent = 'Zwracam...';
+
+      // Build qty map for partial returns
+      var qtyMap = {};
+      for (var qi = 0; qi < ids.length; qi++) {
+        var id = ids[qi];
+        if (returnCartQty[id]) qtyMap[id] = returnCartQty[id];
+      }
+
+      // Optymistyczny update
+      for (var ri = 0; ri < ids.length; ri++) {
+        for (var rj = 0; rj < allLogEntries.length; rj++) {
+          if (allLogEntries[rj].idOp === ids[ri]) {
+            var e = allLogEntries[rj];
+            var retQty = qtyMap[ids[ri]] || e.ilosc;
+            if (retQty < e.ilosc) {
+              e.ilosc = e.ilosc - retQty;
+            } else {
+              e.status = 'Zwrocone';
+            }
+            break;
+          }
+        }
+      }
+      applyLogFilters();
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            toast('Zwrócono ' + res.count + ' pozycji!', 'success');
+            closeModal('modalOsobaDetail');
+            switchTab('osoby', document.querySelector('.nav-btn[data-tab="osoby"]'));
+            loadLogBackground();
+            loadKatalogBackground();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+            document.getElementById('returnCartBtn').disabled = false;
+            document.getElementById('returnCartBtn').textContent = 'Zwróć';
+            loadLogBackground();
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+          document.getElementById('returnCartBtn').disabled = false;
+          document.getElementById('returnCartBtn').textContent = 'Zwróć';
+          loadLogBackground();
+        })
+        .zwrocBatch(ids, photoMap, qtyMap, currentOperator);
+    }
+
+    function filterLogStatus(status, btn) {
+      currentLogFilter = status;
+      btn.parentElement.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyLogFilters();
+    }
+
+    function applyLogFilters() {
+      var q = document.getElementById('searchLog').value;
+      var filtered = allLogEntries.filter(function (i) { return i.kategoria !== 'Z' && i.status !== 'Inwentaryzacja' && (!i.osoba || !isAnyListType(i.osoba)); });
+
+      if (currentLogFilter === 'active') {
+        filtered = filtered.filter(function (i) { return i.status === 'Wydane'; });
+      } else if (currentLogFilter === 'returned') {
+        filtered = filtered.filter(function (i) { return i.status === 'Zwrocone'; });
+      } else if (currentLogFilter === 'damaged') {
+        filtered = filtered.filter(function (i) { return i.status === 'Uszkodzone'; });
+      }
+
+      if (q) {
+        filtered = scoredSearch(filtered, ['nazwaSys', 'nazwaWys', 'osoba', 'sn', 'kategoria'], q);
+      }
+      renderLog(filtered);
+    }
+
+    function showLoading() { document.getElementById('loading').classList.add('show'); }
+    function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+
+    function toast(msg, type, duration) {
+      type = type || 'info';
+      duration = duration || 1500;
+      var el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show ' + type;
+      setTimeout(function () { el.classList.remove('show'); }, duration);
+    }
+
+    function toggleClearBtn(inputId) {
+      var input = document.getElementById(inputId);
+      var btn = document.getElementById(inputId + '-clear');
+      if (btn) {
+        if (input.value.trim()) {
+          btn.classList.add('show');
+        } else {
+          btn.classList.remove('show');
+        }
+      }
+    }
+
+    function clearSearch(inputId) {
+      var input = document.getElementById(inputId);
+      input.value = '';
+      toggleClearBtn(inputId);
+
+      // Trigger appropriate filter
+      if (inputId === 'searchLog') {
+        applyLogFilters();
+      } else if (inputId === 'searchOsoby') {
+        filterOsoby();
+      } else if (inputId === 'searchNarzedzia') {
+        applyNarzFilters();
+      } else if (inputId === 'searchOsobaWyp') {
+        filterOsobaWyp();
+      }
+      input.blur();
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('show'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+    /* =========================
+       OPERATOR PICKER
+    ========================= */
+    function updateOperatorBtn() {
+      var btn = document.getElementById('operatorBtn');
+      if (btn) btn.textContent = currentOperator ? currentOperator : 'Operator?';
+    }
+
+    function showOperatorPicker() {
+      var container = document.getElementById('operatorList');
+      var html = '';
+      for (var i = 0; i < allOsoby.length; i++) {
+        var name = allOsoby[i].imie || allOsoby[i].id || '';
+        html += '<div onclick="selectOperator(\'' + esc(name) + '\')" style="padding:14px 16px;margin:6px 0;background:white;border-radius:10px;cursor:pointer;font-size:16px;font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,.08);">'
+          + esc(name) + '</div>';
+      }
+      container.innerHTML = html;
+      openModal('modalOperator');
+    }
+
+    function selectOperator(name) {
+      currentOperator = name;
+      localStorage.setItem('magazyn_operator', name);
+      updateOperatorBtn();
+      closeModal('modalOperator');
+    }
+
+    function isListaType(name) {
+      return name && name.indexOf('[Lista]') === 0;
+    }
+
+    function isZamowieniaType(name) {
+      return name && name.indexOf('[Zam\u00f3wienia]') === 0;
+    }
+
+    function isAnyListType(name) {
+      return name && (name.indexOf('[Lista]') === 0 || name.indexOf('[Robocza]') === 0 || name.indexOf('[Zam\u00f3wienia]') === 0);
+    }
+
+    function stripListPrefix(name) {
+      if (!name) return name;
+      if (name.indexOf('[Lista] ') === 0) return name.substring(8);
+      if (name.indexOf('[Robocza] ') === 0) return name.substring(10);
+      if (name.indexOf('[Zam\u00f3wienia] ') === 0) return name.substring(13);
+      return name;
+    }
+
+    function getListBadge(name) {
+      if (!name) return '';
+      if (name.indexOf('[Lista]') === 0) return '<span style="background:#0891b2;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:4px;">Lista</span>';
+      if (name.indexOf('[Robocza]') === 0) return '<span style="background:#f59e0b;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:4px;">Robocza</span>';
+      if (name.indexOf('[Zam\u00f3wienia]') === 0) return '<span style="background:#7c3aed;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:4px;">Zam\u00f3wienia</span>';
+      return '';
+    }
+
+    function getListBorderColor(name) {
+      if (!name) return '';
+      if (name.indexOf('[Lista]') === 0) return '#0891b2';
+      if (name.indexOf('[Robocza]') === 0) return '#f59e0b';
+      if (name.indexOf('[Zam\u00f3wienia]') === 0) return '#7c3aed';
+      return '';
+    }
+
+    function esc(t) {
+      if (!t) return '';
+      return String(t).replace(/[&<>"']/g, function (m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+      });
+    }
+
+    var BRANDS = ['STANLEY', 'MAKITA', 'BOSCH', 'YATO', 'DEWALT', 'MILWAUKEE', 'HILTI', 'METABO', 'FESTOOL', 'STIHL', 'HUSQVARNA', 'KARCHER', 'RYOBI', 'EINHELL', 'PARKSIDE', 'GRAPHITE', 'DEDRA', 'TOPEX', 'VOREL', 'STHOR', 'NEO', 'PROLINE', 'HOGERT', 'BAHCO', 'KNIPEX', 'WIHA', 'WERA', 'IRWIN', 'TAJIMA', 'STABILA', 'WURTH', 'FISCHER', 'RAWLPLUG', 'WOLFCRAFT', 'HIKOKI', 'HITACHI', 'KRESS', 'FLEX', 'FEIN', 'AEG', 'RIDGID', 'RUBI', 'BERNER', 'ERBAUER', 'TITAN', 'TOTAL', 'INGCO', 'TOYA', 'EXTOL', 'KLINGSPOR'];
+    var COLORS_PL = ['ZOLTA', 'ŻÓŁTA', 'ZÓŁTA', 'CZARNA', 'CZERWONA', 'ZIELONA', 'NIEBIESKA', 'BIALA', 'BIAŁA', 'SZARA', 'POMARANCZOWA', 'FIOLETOWA', 'BRAZOWA', 'BRĄZOWA', 'SREBRNA', 'ZLOTA', 'ZŁOTA'];
+
+    function simplifyName(fullName) {
+      if (!fullName) return '';
+      var name = String(fullName);
+      // Usuń kod systemowy na początku (np. SYN/6/52)
+      name = name.replace(/^[A-Z]{2,}[\/-]\d+[\/-]\d+\s*/i, '');
+      return name.trim();
+    }
+
+    // Frontendowy lookup: nazwaSys → nazwaWys z allKatalog
+    var _sysToWysMap = null;
+    function resolveNazwa(nazwaSys) {
+      if (!nazwaSys) return '';
+      if (!_sysToWysMap) {
+        _sysToWysMap = {};
+        for (var i = 0; i < allKatalog.length; i++) {
+          _sysToWysMap[allKatalog[i].nazwaSys] = allKatalog[i].nazwaWys;
+        }
+      }
+      return _sysToWysMap[nazwaSys] || simplifyName(nazwaSys) || nazwaSys;
+    }
+    // Resetuj mapę przy przeładowaniu katalogu
+    function resetSysToWysMap() { _sysToWysMap = null; }
+
+    function getConsumedCount(nazwaSys) {
+      var count = 0;
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (e.nazwaSys === nazwaSys && e.status === 'Zuzyte') count += e.ilosc;
+      }
+      return count;
+    }
+
+    /* =========================
+       NAWIGACJA
+    ========================= */
+    function switchTab(tab, btn) {
+      localStorage.setItem('mag_activeTab', tab);
+      document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+
+      document.querySelectorAll('.tab-content').forEach(function (t) { t.classList.remove('active'); });
+
+      var tabId = 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1);
+      var tabEl = document.getElementById(tabId);
+      if (tabEl) tabEl.classList.add('active');
+
+      var titles = { log: 'Log operacji', osoby: 'Osoby', narzedzia: 'Katalog narzędzi', raporty: 'Raporty', inwentaryzacja: 'Inwentaryzacja' };
+      document.getElementById('headerTitle').textContent = titles[tab] || 'Magazyn';
+      // Zatrzymaj kamerę inwentaryzacji jeśli opuszczamy zakładkę
+      if (tab !== 'inwentaryzacja' && invCameraStream) {
+        invStopCamera();
+      }
+      // Sticky bar visibility
+      var sticky=document.getElementById('invStickyBar');
+      if(sticky){if(tab==='inwentaryzacja')sticky.classList.add('visible');else sticky.classList.remove('visible');}
+      if (tab === 'inwentaryzacja') {
+        invLoadSaved();
+      }
+      if (tab === 'raporty' && !document.getElementById('dmSheet').options.length > 1) {
+        dmLoadSheetNames();
+      }
+    }
+</script>
