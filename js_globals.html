@@ -139,7 +139,7 @@
           h += '<div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;margin-top:4px;">'
             + '<span style="font-size:11px;color:#636e72;">Ilość:</span>'
             + '<button onclick="changeListaQty(\'' + esc(e.idOp) + '\',-1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>'
-            + '<span id="lqty_' + esc(e.idOp) + '" style="font-size:14px;font-weight:bold;min-width:20px;text-align:center;">' + e.ilosc + '</span>'
+            + '<input type="number" id="lqty_' + esc(e.idOp) + '" value="' + e.ilosc + '" min="1" onchange="setListaQty(\'' + esc(e.idOp) + '\',this.value)" style="width:55px;height:26px;font-size:14px;font-weight:bold;text-align:center;border:1px solid #d1d5db;border-radius:6px;padding:0 4px;">'
             + '<button onclick="changeListaQty(\'' + esc(e.idOp) + '\',1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>'
             + '</div>';
         }
@@ -160,31 +160,45 @@
     }
 
     var _listaQtyTimers = {};
+    function _saveListaQtyDebounced(idOp, qty) {
+      if (_listaQtyTimers[idOp]) clearTimeout(_listaQtyTimers[idOp]);
+      var finalQty = qty;
+      _listaQtyTimers[idOp] = setTimeout(function() {
+        delete _listaQtyTimers[idOp];
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (!res || !res.success) {
+              toast('Błąd zapisu ilości', 'error');
+              loadLogBackground();
+            }
+          })
+          .withFailureHandler(function(err) {
+            toast('Błąd: ' + err.message, 'error');
+            loadLogBackground();
+          })
+          .updateListaQty(idOp, finalQty);
+      }, 800);
+    }
     function changeListaQty(idOp, delta) {
       for (var i = 0; i < allLogEntries.length; i++) {
         if (allLogEntries[i].idOp === idOp) {
           var newQty = (allLogEntries[i].ilosc || 1) + delta;
           if (newQty < 1) return;
           allLogEntries[i].ilosc = newQty;
-          var span = document.getElementById('lqty_' + idOp);
-          if (span) span.textContent = newQty;
-          if (_listaQtyTimers[idOp]) clearTimeout(_listaQtyTimers[idOp]);
-          var finalQty = newQty;
-          _listaQtyTimers[idOp] = setTimeout(function() {
-            delete _listaQtyTimers[idOp];
-            google.script.run
-              .withSuccessHandler(function(res) {
-                if (!res || !res.success) {
-                  toast('Błąd zapisu ilości', 'error');
-                  loadLogBackground();
-                }
-              })
-              .withFailureHandler(function(err) {
-                toast('Błąd: ' + err.message, 'error');
-                loadLogBackground();
-              })
-              .updateListaQty(idOp, finalQty);
-          }, 800);
+          var inp = document.getElementById('lqty_' + idOp);
+          if (inp) inp.value = newQty;
+          _saveListaQtyDebounced(idOp, newQty);
+          return;
+        }
+      }
+    }
+    function setListaQty(idOp, val) {
+      var qty = parseInt(val, 10);
+      if (!qty || qty < 1) qty = 1;
+      for (var i = 0; i < allLogEntries.length; i++) {
+        if (allLogEntries[i].idOp === idOp) {
+          allLogEntries[i].ilosc = qty;
+          _saveListaQtyDebounced(idOp, qty);
           return;
         }
       }

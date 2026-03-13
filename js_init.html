@@ -1,0 +1,329 @@
+<script>
+    /* =========================
+       BACKUP
+    ========================= */
+    function doBackup(){
+      var btn=document.getElementById('backupBtn');
+      btn.disabled=true;btn.style.opacity='.3';
+      toast('Tworzę backup...','success');
+      google.script.run.withSuccessHandler(function(r){
+        btn.disabled=false;btn.style.opacity='.7';
+        if(r&&r.success)toast('Backup: '+r.name,'success');
+        else toast('Błąd backupu','error');
+      }).withFailureHandler(function(err){
+        btn.disabled=false;btn.style.opacity='.7';
+        toast('Błąd: '+err.message,'error');
+      }).createBackup();
+    }
+
+    /* =========================
+       PRELOAD
+    ========================= */
+    function preload() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (data) {
+          allOsoby = (data && data.osoby) || [];
+          allKatalog = (data && data.katalog) || [];
+          allKatalogGrouped = (data && data.katalogGrouped) || [];
+          resetSysToWysMap();
+          renderOsoby(allOsoby);
+          applyNarzFilters();
+          hideLoading();
+          loadLog();
+          updateOperatorBtn();
+          invPopulateOsobyPicker();
+          loadSzablony();
+          loadTriggerStatus();
+          loadRaportEmail();
+          if (!currentOperator && allOsoby.length) showOperatorPicker();
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd ładowania danych", "error");
+          loadLog();
+          loadOsoby();
+        })
+        .getInitialData();
+    }
+
+    /* =========================
+       LOCAL DATA BACKUP / SYNC
+    ========================= */
+
+    function gatherLocalData() {
+      return new Promise(function(resolve) {
+        var payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          localStorage: {
+            magazyn_operator: localStorage.getItem('magazyn_operator') || '',
+            invOsoba: localStorage.getItem('invOsoba') || '',
+            invHidden: (function(){ try { return JSON.parse(localStorage.getItem('invHidden') || '[]'); } catch(e) { return []; } })()
+          },
+          indexedDB: { scans: [] }
+        };
+        invDbGetAll(function(scans) {
+          payload.indexedDB.scans = scans.map(function(s) {
+            return { id: s.id, thumb: s.thumb, status: s.status, timestamp: s.timestamp };
+            // NOTE: base64 excluded from cloud sync (too large) — included in JSON export
+          });
+          resolve(payload);
+        });
+      });
+    }
+
+    function gatherLocalDataFull() {
+      return new Promise(function(resolve) {
+        var payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          localStorage: {
+            magazyn_operator: localStorage.getItem('magazyn_operator') || '',
+            invOsoba: localStorage.getItem('invOsoba') || '',
+            invHidden: (function(){ try { return JSON.parse(localStorage.getItem('invHidden') || '[]'); } catch(e) { return []; } })()
+          },
+          indexedDB: { scans: [] }
+        };
+        invDbGetAll(function(scans) {
+          // Full export includes base64 images
+          payload.indexedDB.scans = scans;
+          resolve(payload);
+        });
+      });
+    }
+
+    function exportLocalData() {
+      var btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Eksportuję...';
+      gatherLocalDataFull().then(function(payload) {
+        var json = JSON.stringify(payload, null, 2);
+        var blob = new Blob([json], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'magazyn-backup-' + new Date().toISOString().slice(0,10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        btn.disabled = false;
+        btn.textContent = '💾 Eksportuj JSON';
+        toast('Dane wyeksportowane do pliku JSON', 'success');
+        updateBackupStatus('Eksport: ' + new Date().toLocaleTimeString());
+      });
+    }
+
+    function syncLocalToCloud() {
+      var btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Synchronizuję...';
+      gatherLocalData().then(function(payload) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            btn.disabled = false;
+            btn.textContent = '☁️ Sync do chmury';
+            if (result && result.success) {
+              toast('Dane zsynchronizowane z chmurą', 'success');
+              updateBackupStatus('Sync: ' + new Date().toLocaleTimeString());
+              localStorage.setItem('lastCloudSync', new Date().toISOString());
+            } else {
+              toast('Błąd synchronizacji', 'error');
+            }
+          })
+          .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btn.textContent = '☁️ Sync do chmury';
+            toast('Błąd: ' + (err.message || err), 'error');
+          })
+          .saveLocalBackup({
+            operator: currentOperator,
+            type: 'manual',
+            payload: payload
+          });
+      });
+    }
+
+    function importLocalData() {
+      document.getElementById('importFileInput').click();
+    }
+
+    function handleImportFile(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var data = JSON.parse(e.target.result);
+          if (!data.version || !data.localStorage) {
+            toast('Nieprawidłowy plik backupu', 'error');
+            return;
+          }
+          if (!confirm('Przywrócić dane z pliku ' + file.name + '?\nTo nadpisze aktualne dane lokalne.')) return;
+          restorePayload(data);
+        } catch(err) {
+          toast('Błąd odczytu pliku: ' + err.message, 'error');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function restoreFromCloud() {
+      var btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Pobieranie...';
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.textContent = '☁️ Przywróć z chmury';
+          if (!result || !result.success) {
+            toast(result ? result.message : 'Brak backupów', 'error');
+            return;
+          }
+          var ts = result.timestamp;
+          if (!confirm('Przywrócić dane z chmury?\nBackup z: ' + ts + '\nOperator: ' + result.operator + '\nTo nadpisze aktualne dane lokalne.')) return;
+          restorePayload(result.payload);
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.textContent = '☁️ Przywróć z chmury';
+          toast('Błąd: ' + (err.message || err), 'error');
+        })
+        .getLocalBackup();
+    }
+
+    function restorePayload(payload) {
+      // Restore localStorage
+      if (payload.localStorage) {
+        if (payload.localStorage.magazyn_operator) {
+          localStorage.setItem('magazyn_operator', payload.localStorage.magazyn_operator);
+          currentOperator = payload.localStorage.magazyn_operator;
+          updateOperatorBtn();
+        }
+        if (payload.localStorage.invOsoba) {
+          localStorage.setItem('invOsoba', payload.localStorage.invOsoba);
+        }
+        if (payload.localStorage.invHidden) {
+          localStorage.setItem('invHidden', JSON.stringify(payload.localStorage.invHidden));
+        }
+      }
+
+      // Restore IndexedDB scans (if present with base64)
+      if (payload.indexedDB && payload.indexedDB.scans && payload.indexedDB.scans.length) {
+        var scansWithData = payload.indexedDB.scans.filter(function(s) { return s.base64; });
+        if (scansWithData.length) {
+          var restored = 0;
+          scansWithData.forEach(function(scan) {
+            invDbSave(scan, function() {
+              restored++;
+              if (restored === scansWithData.length) {
+                toast('Przywrócono ' + restored + ' skanów z backupu', 'success');
+              }
+            });
+          });
+        } else {
+          toast('Dane localStorage przywrócone (brak skanów z obrazami)', 'success');
+        }
+      } else {
+        toast('Dane localStorage przywrócone', 'success');
+      }
+      updateBackupStatus('Przywrócono: ' + new Date().toLocaleTimeString());
+    }
+
+    function updateBackupStatus(msg) {
+      var el = document.getElementById('backupSyncStatus');
+      if (el) el.textContent = msg;
+    }
+
+    // Auto-sync: co 10 min jeśli jest operator
+    var autoSyncInterval = null;
+    function startAutoSync() {
+      if (autoSyncInterval) return;
+      autoSyncInterval = setInterval(function() {
+        if (!currentOperator) return;
+        gatherLocalData().then(function(payload) {
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result && result.success) {
+                updateBackupStatus('Auto-sync: ' + new Date().toLocaleTimeString());
+                localStorage.setItem('lastCloudSync', new Date().toISOString());
+              }
+            })
+            .saveLocalBackup({
+              operator: currentOperator,
+              type: 'auto',
+              payload: payload
+            });
+        });
+      }, 10 * 60 * 1000); // 10 minut
+    }
+
+    /* =========================
+       INIT
+    ========================= */
+    /* =========================
+       AUTO-VERSION CHECK
+    ========================= */
+    var _appLoadedVersion = null;
+    function startVersionCheck() {
+      google.script.run.withSuccessHandler(function(info) {
+        if (info && info.version) {
+          _appLoadedVersion = info.version;
+        }
+        // Poll co 30s
+        setInterval(checkForNewVersion, 30000);
+      }).getAppVersion();
+    }
+    function checkForNewVersion() {
+      google.script.run.withSuccessHandler(function(info) {
+        if (!info || !_appLoadedVersion) return;
+        if (info.version !== _appLoadedVersion && info.url) {
+          // Nowa wersja — pokaż banner
+          showUpdateBanner(info.url);
+        }
+      }).getAppVersion();
+    }
+    function showUpdateBanner(newUrl) {
+      if (document.getElementById('updateBanner')) return;
+      var banner = document.createElement('div');
+      banner.id = 'updateBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#0891b2;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+      banner.innerHTML = '<span>Dostępna nowa wersja aplikacji</span>'
+        + '<button onclick="window.location.href=\'' + newUrl.replace(/'/g, "\\'") + '\'" '
+        + 'style="background:#fff;color:#0891b2;border:none;padding:8px 18px;border-radius:8px;font-weight:bold;font-size:14px;cursor:pointer;">Odśwież</button>';
+      document.body.prepend(banner);
+    }
+
+    window.addEventListener("load", function () {
+      preload();
+      // Przywróć ostatnią zakładkę
+      var savedTab = localStorage.getItem('mag_activeTab');
+      if (savedTab) {
+        var navBtn = document.querySelector('.nav-btn[onclick*="switchTab(\'' + savedTab + '\'"]');
+        switchTab(savedTab, navBtn);
+      }
+      // Show DM section if ?dm=1 in URL
+      if (new URLSearchParams(window.location.search).get('dm') === '1') {
+        var dmSec = document.getElementById('dmSection');
+        if (dmSec) dmSec.style.display = '';
+      }
+      // Start auto-sync po załadowaniu
+      setTimeout(startAutoSync, 5000);
+      // Start version check po 5s
+      setTimeout(startVersionCheck, 5000);
+      // Auto-refresh danych co 2 min (sync między urządzeniami)
+      setTimeout(function() {
+        setInterval(function() {
+          loadLogBackground();
+          loadKatalogBackground();
+        }, 2 * 60 * 1000);
+      }, 10000);
+      // Show last sync time
+      var lastSync = localStorage.getItem('lastCloudSync');
+      if (lastSync) {
+        updateBackupStatus('Ostatni sync: ' + new Date(lastSync).toLocaleString());
+      }
+    });
+</script>
