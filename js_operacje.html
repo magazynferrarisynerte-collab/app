@@ -388,8 +388,9 @@
       for (var i = 0; i < flat.length; i++) {
         var item = flat[i];
         // Group all items by kategoria + name (+ SN for E, except Zamówienia)
+        // Uszkodzone: osobny klucz (nie łącz z normalnymi)
         var rawName = (simplifyName(item.nazwaWys) || item.nazwaWys || item.nazwaSys || '').replace(/\s+/g, ' ').trim();
-        var key = item.kategoria + '|' + rawName + (item.sn && !isZam ? '|SN:' + item.sn : '');
+        var key = item.kategoria + '|' + rawName + (item.sn && !isZam ? '|SN:' + item.sn : '') + (item._damaged ? '|DMG' : '');
         if (!groups[key]) {
           groups[key] = {
             nazwaWys: item.nazwaWys,
@@ -402,7 +403,9 @@
             opis: item.opis,
             przesun: '',
             dataPrzesun: '',
-            _grouped: true
+            _grouped: true,
+            _damaged: item._damaged || false,
+            _logId: item._logId || null
           };
           result.push(groups[key]);
         }
