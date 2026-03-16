@@ -237,7 +237,7 @@
                 break;
               }
             }
-            renderOsobaWypList(currentDetailActive);
+            filterOsobaWyp();
           } else {
             toast('Błąd zapisu', 'error');
           }
@@ -318,7 +318,7 @@
           returnCartQty[currentDetailActive[k].idOp] = currentDetailActive[k].ilosc;
         }
       }
-      renderOsobaWypList(currentDetailActive);
+      filterOsobaWyp();
     }
 
     function transferSelected() {
@@ -382,7 +382,7 @@
         delete returnCartQty[idOp];
       }
       updateReturnCart();
-      renderOsobaWypList(currentDetailActive);
+      filterOsobaWyp();
     }
 
     function changeReturnQty(idOp, delta) {
