@@ -501,8 +501,8 @@
       var groups = {};
       for (var i = 0; i < normalEntries.length; i++) {
         var e = normalEntries[i];
-        // Zamówienia: zawsze grupuj po nazwaSys (kodzie), ignoruj SN='???'
-        var key = isZam ? e.nazwaSys : (e.sn ? (e.nazwaSys + '|' + e.sn) : (e.nazwaWys || e.nazwaSys));
+        // Zamówienia: grupuj po nazwaWys (nazwie wyświetlanej), ignoruj SN='???'
+        var key = isZam ? (e.nazwaWys || e.nazwaSys) : (e.sn ? (e.nazwaSys + '|' + e.sn) : (e.nazwaWys || e.nazwaSys));
         if (!groups[key]) {
           groups[key] = { nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys, sn: isZam ? '' : e.sn, ilosc: 0, kategoria: e.kategoria, uwagi: [] };
         }
