@@ -1,0 +1,860 @@
+<script>
+    /* =========================
+       RAPORT USZKODZONYCH
+    ========================= */
+    function utworzListe() {
+      var typ = prompt('Typ listy:\n1 = Normalna (liczy stan magazynowy)\n2 = Robocza (wirtualna, bez zmian stanu)\n3 = Zam\u00f3wienia (lista z S/N)\n\nWpisz 1, 2 lub 3:');
+      if (!typ) return;
+      typ = typ.trim();
+      if (typ !== '1' && typ !== '2' && typ !== '3') { toast('Wybierz 1, 2 lub 3', 'error'); return; }
+      var nazwa = prompt('Podaj nazw\u0119 listy:');
+      if (!nazwa || !nazwa.trim()) return;
+      nazwa = nazwa.trim();
+      var prefixes = { '1': '[Lista] ', '2': '[Robocza] ', '3': '[Zam\u00f3wienia] ' };
+      var prefix = prefixes[typ];
+      var fullName = prefix + nazwa;
+      showLoading();
+      google.script.run.withSuccessHandler(function(r) {
+        hideLoading();
+        if (!r || !r.success) { showToast('Błąd tworzenia listy', 'error'); return; }
+        // Odśwież osoby
+        allOsoby.push({ id: r.id, imie: fullName, telefon: 'lista' });
+        showToast('Utworzono listę: ' + nazwa);
+        // Otwórz wydaj modal z pre-wybraną pseudo-osobą
+        wypCartItems = [];
+        currentSelectedGroup = null;
+        wypSelectOsoba(r.id, fullName);
+        openModal('modalWypozycz');
+      }).withFailureHandler(function(e) {
+        hideLoading();
+        showToast('Błąd: ' + e.message, 'error');
+      }).addOsoba(fullName, 'lista');
+    }
+
+    function zamknijListe() {
+      if (!currentDetailOsoba) return;
+      var active = allLogEntries.filter(function(e) {
+        return e.osoba === currentDetailOsoba.imie && e.status === 'Wydane';
+      });
+      if (!active.length) { showToast('Lista jest pusta — brak narzędzi do zwrotu', 'info'); return; }
+      if (!confirm('Zwrócić wszystkie narzędzia (' + active.length + ') i zamknąć listę?')) return;
+      var ids = active.map(function(e) { return e.idOp; });
+      showLoading();
+      google.script.run.withSuccessHandler(function(r) {
+        hideLoading();
+        if (r && r.success) {
+          showToast('Lista zamknięta, narzędzia zwrócone (' + ids.length + ')', 'success');
+          closeModal('modalOsobaDetail');
+          loadLogBackground();
+          loadKatalogBackground();
+        } else {
+          showToast('Błąd: ' + (r && r.error || 'Nieznany'), 'error');
+        }
+      }).withFailureHandler(function(e) {
+        hideLoading();
+        showToast('Błąd: ' + e.message, 'error');
+      }).zwrocBatch(ids, {}, {}, currentOperator);
+    }
+
+    function edytujNazweListe() {
+      if (!currentDetailOsoba) return;
+      var oldName = currentDetailOsoba.imie;
+      var oldClean = stripListPrefix(oldName);
+      var newClean = prompt('Nowa nazwa listy:', oldClean);
+      if (!newClean || !newClean.trim()) return;
+      newClean = newClean.trim();
+      if (newClean === oldClean) return;
+
+      var prefix = '';
+      if (oldName.indexOf('[Lista] ') === 0) prefix = '[Lista] ';
+      else if (oldName.indexOf('[Robocza] ') === 0) prefix = '[Robocza] ';
+      else if (oldName.indexOf('[Zamówienia] ') === 0) prefix = '[Zamówienia] ';
+      var newFullName = prefix + newClean;
+
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(res) {
+          hideLoading();
+          if (res && res.success) {
+            toast('Nazwa zmieniona! (zaktualizowano ' + (res.updated || 0) + ' operacji)', 'success');
+            currentDetailOsoba.imie = newFullName;
+            document.getElementById('osobaDetailTitle').textContent = newFullName;
+            document.getElementById('osobaDetailInfo').innerHTML = '<b>' + esc(newFullName) + '</b>';
+            loadOsoby();
+            loadLogBackground();
+          } else {
+            toast('Błąd: ' + (res && res.error || 'Nieznany'), 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .renameOsoba(currentDetailOsoba.id, newFullName);
+    }
+
+    function showRaportUszkodzonych() {
+      showLoading();
+      google.script.run.withSuccessHandler(function (data) {
+        hideLoading();
+        renderRaportUszkodzonych(data || []);
+        openModal('modalRaportUszkodzonych');
+      }).withFailureHandler(function () {
+        hideLoading();
+        toast('Błąd ładowania raportu', 'error');
+      }).getRaportUszkodzonych();
+    }
+
+    var raportUszkodzonychData = [];
+
+    function renderRaportUszkodzonych(data) {
+      raportUszkodzonychData = data;
+      var container = document.getElementById('raportUszkodzonychContent');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak zg\u0142oszonych uszkodze\u0144</div>';
+        return;
+      }
+
+      // Group by osoba
+      var groups = {};
+      var order = [];
+      for (var i = 0; i < data.length; i++) {
+        var key = data[i].osoba || '(brak osoby)';
+        if (!groups[key]) { groups[key] = []; order.push(key); }
+        groups[key].push({ item: data[i], idx: i });
+      }
+
+      var html = '';
+      for (var g = 0; g < order.length; g++) {
+        var groupName = order[g];
+        var items = groups[groupName];
+        html += '<div style="background:#fee2e2;padding:8px 12px;border-radius:10px;margin-bottom:4px;' + (g > 0 ? 'margin-top:14px;' : '') + 'font-weight:bold;font-size:14px;color:#991b1b;">'
+          + esc(groupName) + ' <span style="font-size:12px;color:#636e72;font-weight:normal;">(' + items.length + ' poz.)</span></div>';
+
+        for (var j = 0; j < items.length; j++) {
+          var r = items[j].item;
+          var idx = items[j].idx;
+          html += '<div class="narz-card" style="margin-bottom:8px;">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+            + '<b>' + esc(resolveNazwa(r.nazwaSys)) + '</b>'
+            + '<span style="font-size:12px;color:#636e72;">' + esc(r.data) + '</span>'
+            + '</div>'
+            + (r.sn ? '<div style="color:#8b5cf6;font-size:12px;">SN: ' + esc(r.sn) + '</div>' : '')
+            + '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'
+            + '<span style="font-size:13px;font-weight:bold;">Ilo\u015b\u0107:</span>'
+            + '<button onclick="zmienIloscDmg(' + idx + ',-1)" style="width:30px;height:30px;border:1px solid #ddd;border-radius:8px;background:#f8f9fa;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">\u2212</button>'
+            + '<input type="number" id="dmgIlosc_' + idx + '" value="' + r.ilosc + '" min="1" style="width:60px;height:30px;text-align:center;border:1px solid #ddd;border-radius:8px;font-size:14px;">'
+            + '<button onclick="zmienIloscDmg(' + idx + ',1)" style="width:30px;height:30px;border:1px solid #ddd;border-radius:8px;background:#f8f9fa;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>'
+            + '<button onclick="zapiszIloscUszkodzenia(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;">Zapisz</button>'
+            + '</div>'
+            + '<div style="margin-top:6px;">'
+            + '<textarea id="dmgOpis_' + idx + '" style="width:100%;min-height:40px;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;resize:vertical;">' + esc(r.opisUszkodzenia) + '</textarea>'
+            + '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">'
+            + '<button onclick="zapiszOpisUszkodzenia(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">Zapisz opis</button>'
+            + '<button onclick="dmgPrzeniesNaListe(' + idx + ')" style="background:#0891b2;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">Przenie\u015b na list\u0119</button>'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+        }
+      }
+      container.innerHTML = html;
+    }
+
+    function zmienIloscDmg(idx, delta) {
+      var input = document.getElementById('dmgIlosc_' + idx);
+      if (!input) return;
+      var val = parseInt(input.value) || 1;
+      val += delta;
+      if (val < 1) val = 1;
+      input.value = val;
+    }
+
+    function zapiszIloscUszkodzenia(idx) {
+      var r = raportUszkodzonychData[idx];
+      if (!r) return;
+      var nowaIlosc = parseInt(document.getElementById('dmgIlosc_' + idx).value) || 1;
+      r.ilosc = nowaIlosc;
+      toast('Zapisuj\u0119...', 'info');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) toast('Ilo\u015b\u0107 zapisana', 'success');
+          else toast('B\u0142\u0105d: ' + (res.error || ''), 'error');
+        })
+        .withFailureHandler(function (err) { toast('B\u0142\u0105d: ' + err.message, 'error'); })
+        .edytujIloscUszkodzenia(r.idOp, nowaIlosc);
+    }
+
+    function zapiszOpisUszkodzenia(idx) {
+      var r = raportUszkodzonychData[idx];
+      if (!r) return;
+      var nowyOpis = document.getElementById('dmgOpis_' + idx).value.trim();
+      r.opisUszkodzenia = nowyOpis;
+      toast('Zapisuj\u0119...', 'info');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            toast('Opis zapisany', 'success');
+          } else {
+            toast('B\u0142\u0105d: ' + (res.error || ''), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast('B\u0142\u0105d: ' + err.message, 'error');
+        })
+        .edytujOpisUszkodzenia(r.idOp, nowyOpis);
+    }
+
+    function dmgPrzeniesNaListe(idx) {
+      var r = raportUszkodzonychData[idx];
+      if (!r) return;
+      var container = document.getElementById('raportUszkodzonychContent');
+      var h = '<div style="background:#eef0ff;padding:12px;border-radius:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+        + '<b style="font-size:14px;color:#0891b2;">Przenie\u015b \u201C' + esc(resolveNazwa(r.nazwaSys)) + '\u201D na:</b>'
+        + '<span onclick="renderRaportUszkodzonych(raportUszkodzonychData)" style="cursor:pointer;font-size:22px;color:#636e72;">&times;</span>'
+        + '</div>'
+        + '<input type="text" id="dmgMoveSearch" placeholder="Szukaj osoby/listy..." oninput="dmgFilterMove()" style="width:100%;height:40px;border:1px solid #ddd;border-radius:8px;padding:0 12px;font-size:14px;margin-bottom:8px;">'
+        + '<div id="dmgMoveList" style="max-height:50vh;overflow-y:auto;">';
+      for (var i = 0; i < allOsoby.length; i++) {
+        var o = allOsoby[i];
+        var borderColor = getListBorderColor(o.imie);
+        h += '<div class="dmg-move-item" onclick="executeMoveDmg(' + idx + ',' + i + ')" style="padding:10px 12px;background:white;border-radius:8px;margin-bottom:4px;cursor:pointer;font-size:14px;' + (borderColor ? 'border-left:3px solid ' + borderColor + ';' : '') + '">'
+          + getListBadge(o.imie)
+          + '<b>' + esc(o.imie) + '</b></div>';
+      }
+      h += '</div></div>';
+      container.innerHTML = h;
+      setTimeout(function() { var el = document.getElementById('dmgMoveSearch'); if (el) el.focus(); }, 100);
+    }
+
+    function dmgFilterMove() {
+      var q = (document.getElementById('dmgMoveSearch').value || '').trim().toLowerCase();
+      var items = document.querySelectorAll('.dmg-move-item');
+      for (var i = 0; i < items.length; i++) {
+        var text = items[i].textContent.toLowerCase();
+        items[i].style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+      }
+    }
+
+    function executeMoveDmg(idx, osobaIdx) {
+      var r = raportUszkodzonychData[idx];
+      if (!r) return;
+      var nowaOsoba = allOsoby[osobaIdx].imie;
+      toast('Przenosz\u0119...', 'info');
+      r.osoba = nowaOsoba;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            toast('Przeniesiono na: ' + nowaOsoba, 'success');
+            renderRaportUszkodzonych(raportUszkodzonychData);
+            loadLogBackground();
+          } else {
+            toast('B\u0142\u0105d: ' + (res.error || ''), 'error');
+          }
+        })
+        .withFailureHandler(function (err) { toast('B\u0142\u0105d: ' + err.message, 'error'); })
+        .przeniesUszkodzone(r.idOp, nowaOsoba, currentOperator);
+    }
+
+    /* =========================
+       SCORING SEARCH (bez zmian)
+    ========================= */
+    function normalize(str) {
+      if (!str) return '';
+      return String(str).toLowerCase()
+        .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
+        .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
+        .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z');
+    }
+
+    var SYNONYMS = {
+      'mlotek': ['mlot', 'mloteczek', 'mlotek'],
+      'mlot': ['mlotek', 'mloteczek', 'mlot'],
+      'klucz nasadowy': ['nasadki', 'klucz nasadowy'],
+      'nasadki': ['klucz nasadowy', 'nasadki'],
+      'wiertarka': ['wiertarko-wkretarka', 'wiertarka'],
+      'szlifierka': ['szlifierka katowa', 'flex', 'szlifierka'],
+      'flex': ['szlifierka katowa', 'szlifierka', 'flex'],
+      'kombinerki': ['kombinerki', 'szczypce'],
+      'szczypce': ['kombinerki', 'szczypce'],
+      'srubokrety': ['wkretak', 'srubokrety', 'srubokret'],
+      'wkretak': ['srubokrety', 'srubokret', 'wkretak'],
+      'srubokret': ['srubokrety', 'wkretak', 'srubokret'],
+      'poziomica': ['poziomica', 'libella'],
+      'libella': ['poziomica', 'libella']
+    };
+
+    function expandWithSynonyms(word) {
+      var syns = SYNONYMS[word];
+      if (!syns) return [word];
+      var result = [word];
+      for (var i = 0; i < syns.length; i++) {
+        if (syns[i] !== word) result.push(syns[i]);
+      }
+      return result;
+    }
+
+    function levenshtein(a, b) {
+      var m = a.length, n = b.length;
+      if (m === 0) return n;
+      if (n === 0) return m;
+      var prev = [], curr = [];
+      for (var j = 0; j <= n; j++) prev[j] = j;
+      for (var i = 1; i <= m; i++) {
+        curr[0] = i;
+        for (var j = 1; j <= n; j++) {
+          var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+        }
+        var tmp = prev; prev = curr; curr = tmp;
+      }
+      return prev[n];
+    }
+
+    function scoreWord(text, word) {
+      var t = normalize(text);
+      var w = word;
+      if (!t || !w) return 0;
+      if (t === w) return 1.0;
+      if (t.indexOf(w) === 0) return 0.9;
+      if (t.indexOf(w) !== -1) return 0.85;
+      var maxLev = w.length <= 3 ? 0 : w.length <= 5 ? 1 : 2;
+      if (maxLev === 0) return 0;
+      var tWords = t.split(/\s+/);
+      var bestLev = Infinity;
+      for (var i = 0; i < tWords.length; i++) {
+        var d = levenshtein(tWords[i], w);
+        if (d < bestLev) bestLev = d;
+      }
+      if (bestLev <= maxLev) {
+        return 0.6 + (maxLev - bestLev) * 0.075;
+      }
+      return 0;
+    }
+
+    function scoreItem(item, fields, query) {
+      var q = normalize(query).trim();
+      if (!q) return 1;
+
+      // SN priority: exact, ends-with (last 3+ digits), contains
+      if (item.sn) {
+        var snNorm = normalize(item.sn);
+        if (snNorm === q) return 1.0;
+        if (q.length >= 3 && snNorm.length >= q.length && snNorm.slice(-q.length) === q) return 0.98;
+        if (q.length >= 3 && snNorm.indexOf(q) !== -1) return 0.95;
+      }
+
+      var words = q.split(/\s+/);
+      var wordScores = [];
+      for (var wi = 0; wi < words.length; wi++) {
+        var expanded = expandWithSynonyms(words[wi]);
+        var bestScore = 0;
+        for (var fi = 0; fi < fields.length; fi++) {
+          var fieldVal = item[fields[fi]];
+          if (!fieldVal) continue;
+          for (var ei = 0; ei < expanded.length; ei++) {
+            var s = scoreWord(fieldVal, expanded[ei]);
+            if (ei > 0 && s > 0) s *= 0.9;
+            if (s > bestScore) bestScore = s;
+          }
+        }
+        if (bestScore === 0) return 0;
+        wordScores.push(bestScore);
+      }
+      if (!wordScores.length) return 0;
+      var minS = wordScores[0], sum = 0;
+      for (var i = 0; i < wordScores.length; i++) {
+        if (wordScores[i] < minS) minS = wordScores[i];
+        sum += wordScores[i];
+      }
+      return minS * 0.4 + (sum / wordScores.length) * 0.6;
+    }
+
+    function scoredSearch(data, fields, query) {
+      var results = [];
+      for (var i = 0; i < data.length; i++) {
+        var s = scoreItem(data[i], fields, query);
+        if (s > 0) results.push({ item: data[i], score: s });
+      }
+      results.sort(function (a, b) { return b.score - a.score; });
+      var out = [];
+      for (var i = 0; i < results.length; i++) out.push(results[i].item);
+      return out;
+    }
+
+    /* =========================
+       LICZNIK AKTYWNYCH
+    ========================= */
+    function getActiveCountByPerson() {
+      var counts = {};
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (e.osoba && (e.status === 'Wydane' || (e.status === 'Uszkodzone' && isAnyListType(e.osoba)))) {
+          counts[e.osoba] = (counts[e.osoba] || 0) + 1;
+        }
+      }
+      return counts;
+    }
+
+    /* =========================
+       RAPORTY
+    ========================= */
+    var currentRaportData = [];
+    var currentRaportColumns = [];
+    var currentRaportTitle = '';
+
+    function showRaport(title, columns, data) {
+      currentRaportTitle = title;
+      currentRaportColumns = columns;
+      currentRaportData = data;
+      document.getElementById('raportTitle').textContent = title;
+
+      var html = '<div id="raportPrintHeader" style="display:none;margin-bottom:20px;">';
+      html += '<h2 style="margin:0 0 5px 0;">' + esc(title) + '</h2>';
+      html += '<p style="margin:0;color:#636e72;">Data: ' + new Date().toLocaleDateString('pl-PL') + '</p>';
+      html += '</div>';
+
+      html += '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
+      html += '<thead><tr>';
+      for (var i = 0; i < columns.length; i++) {
+        html += '<th style="padding:10px;border:1px solid #ddd;background:#f8f9fa;text-align:left;">' + esc(columns[i].label) + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+
+      for (var j = 0; j < data.length; j++) {
+        var row = data[j];
+        html += '<tr>';
+        for (var k = 0; k < columns.length; k++) {
+          html += '<td style="padding:8px;border:1px solid #ddd;">' + esc(String(row[columns[k].key] != null ? row[columns[k].key] : '')) + '</td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+
+      if (!data.length) html += '<div class="empty-msg">Brak danych do wyświetlenia</div>';
+
+      html += '<div id="raportPrintFooter" style="display:none;margin-top:30px;font-size:12px;color:#636e72;">';
+      html += 'Wygenerowano: ' + new Date().toLocaleString('pl-PL') + ' | Pozycji: ' + data.length;
+      html += '</div>';
+
+      document.getElementById('raportContent').innerHTML = html;
+      openModal('modalRaport');
+    }
+
+    function showRaportOsoby() {
+      if (!currentDetailOsoba) return;
+      var isLista = isAnyListType(currentDetailOsoba.imie);
+      var active = allLogEntries.filter(function (e) {
+        if (e.osoba !== currentDetailOsoba.imie) return false;
+        if (isLista) return e.status === 'Wydane' || e.status === 'Uszkodzone';
+        return e.status === 'Wydane';
+      });
+
+      if (isLista) { showRaportListy(active); return; }
+
+      var data = [];
+      for (var i = 0; i < active.length; i++) {
+        var e = active[i];
+        data.push({
+          lp: i + 1,
+          nazwaSys: e.nazwaSys,
+          sn: e.sn || '',
+          kategoria: e.kategoria,
+          ilosc: e.ilosc,
+          dataWydania: e.dataWydania
+        });
+      }
+
+      showRaport(
+        'Protokół przekazania — ' + currentDetailOsoba.imie,
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'sn', label: 'SN' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'ilosc', label: 'Ilość' },
+          { key: 'dataWydania', label: 'Data wydania' }
+        ],
+        data
+      );
+    }
+
+    function parseDatePL(str) {
+      if (!str) return new Date(0);
+      var p = String(str).split('.');
+      if (p.length === 3) return new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+      return new Date(str) || new Date(0);
+    }
+
+    function showRaportListy(active) {
+      // Rozdziel normalne i uszkodzone
+      var normalEntries = [];
+      var damagedEntries = [];
+      for (var i = 0; i < active.length; i++) {
+        if (active[i].status === 'Uszkodzone') damagedEntries.push(active[i]);
+        else normalEntries.push(active[i]);
+      }
+
+      // Grupuj normalne wydania wg nazwaWys
+      var groups = {};
+      for (var i = 0; i < normalEntries.length; i++) {
+        var e = normalEntries[i];
+        var key = e.sn ? (e.nazwaSys + '|' + e.sn) : (e.nazwaWys || e.nazwaSys);
+        if (!groups[key]) {
+          groups[key] = { nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys, sn: e.sn, ilosc: 0, kategoria: e.kategoria, uwagi: [] };
+        }
+        groups[key].ilosc += e.ilosc;
+        if (e.opisUszkodzenia && e.opisUszkodzenia.trim()) groups[key].uwagi.push(e.opisUszkodzenia.trim());
+      }
+
+      var data = [];
+      var lp = 0;
+
+      for (var key in groups) {
+        var g = groups[key];
+        var katItems = [];
+        for (var ki = 0; ki < allKatalog.length; ki++) {
+          var k = allKatalog[ki];
+          if (g.sn) { if (k.nazwaSys === g.nazwaSys) katItems.push(k); }
+          else { if (k.nazwaWys === g.nazwaWys) katItems.push(k); }
+        }
+
+        var uwagi = g.uwagi.length ? g.uwagi.join('; ') : '';
+        if (g.sn || katItems.length <= 1) {
+          var ki0 = katItems[0] || {};
+          lp++;
+          data.push({ lp: lp, kod: ki0.nazwaSys || (katItems.length ? g.nazwaSys : '-'), nazwa: ki0.nazwaWys || g.nazwaWys, sn: g.sn || '', opis: ki0.opis || '', uwagi: uwagi, ilosc: g.ilosc, jm: 'szt' });
+        } else {
+          var transfers = {};
+          for (var ti = 0; ti < katItems.length; ti++) {
+            var tk = katItems[ti];
+            var tkey = (tk.przesun || '-') + '|' + (tk.dataPrzesun || '-');
+            if (!transfers[tkey]) transfers[tkey] = { przesun: tk.przesun || '', dataPrzesun: tk.dataPrzesun || '', qty: 0, opis: tk.opis || '', kod: tk.nazwaSys };
+            transfers[tkey].qty += tk.stanPoczatkowy;
+          }
+          var sorted = [];
+          for (var tk2 in transfers) sorted.push(transfers[tk2]);
+          sorted.sort(function(a, b) { return parseDatePL(a.dataPrzesun) - parseDatePL(b.dataPrzesun); });
+          var remaining = g.ilosc;
+          for (var si = 0; si < sorted.length && remaining > 0; si++) {
+            var st = sorted[si];
+            var take = Math.min(remaining, st.qty);
+            if (take > 0) { lp++; data.push({ lp: lp, kod: st.kod || g.nazwaSys, nazwa: g.nazwaWys, sn: '', opis: st.opis || '', uwagi: si === 0 ? uwagi : '', ilosc: take, jm: 'szt' }); remaining -= take; }
+          }
+          if (remaining > 0) { lp++; data.push({ lp: lp, kod: g.nazwaSys, nazwa: g.nazwaWys, sn: '', opis: '', uwagi: '', ilosc: remaining, jm: 'szt' }); }
+        }
+      }
+
+      // Grupuj uszkodzone
+      var dmgGroups = {};
+      for (var di = 0; di < damagedEntries.length; di++) {
+        var de = damagedEntries[di];
+        var dk = de.sn ? (de.nazwaSys + '|' + de.sn) : (de.nazwaWys || de.nazwaSys);
+        if (!dmgGroups[dk]) {
+          dmgGroups[dk] = { nazwaWys: de.nazwaWys || de.nazwaSys, nazwaSys: de.nazwaSys, sn: de.sn, ilosc: 0, opis: de.opisUszkodzenia || '' };
+        }
+        dmgGroups[dk].ilosc += de.ilosc;
+      }
+      var dmgData = [];
+      var dlp = 0;
+      for (var dk2 in dmgGroups) {
+        dlp++;
+        var dg = dmgGroups[dk2];
+        dmgData.push({ lp: dlp, kod: dg.nazwaSys, nazwa: dg.nazwaWys, sn: dg.sn || '', opis: dg.opis, ilosc: dg.ilosc, jm: 'szt' });
+      }
+
+      // Suma
+      var totalQty = 0;
+      for (var s = 0; s < data.length; s++) totalQty += data[s].ilosc;
+      var totalDmg = 0;
+      for (var s2 = 0; s2 < dmgData.length; s2++) totalDmg += dmgData[s2].ilosc;
+
+      var listName = stripListPrefix(currentDetailOsoba.imie);
+      var dzis = new Date().toLocaleDateString('pl-PL');
+
+      // Buduj HTML w stylu dokumentu MM
+      var h = '';
+      h += '<div id="raportPrintHeader" style="display:none"></div>';
+
+      // === NAGŁÓWEK ===
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;font-size:13px;">';
+      h += '<div style="flex:1;"><strong style="font-size:15px;">Lista narzędzi</strong></div>';
+      h += '<div style="border:2px solid #333;padding:8px 14px;text-align:right;">';
+      h += '<div style="font-size:16px;font-weight:bold;">' + esc(listName) + '</div>';
+      h += '<div style="font-size:11px;color:#555;">Data: ' + dzis + '</div>';
+      h += '</div></div>';
+
+      // === ODBIORCA ===
+      h += '<div style="font-size:13px;margin-bottom:12px;">';
+      h += '<i>Odbiorca:</i><br><b>' + esc(stripListPrefix(currentDetailOsoba.imie)) + '</b>';
+      h += '</div>';
+
+      // === TABELA GŁÓWNA ===
+      var tbl = '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:6px;">';
+      tbl += '<thead><tr style="background:#f0f0f0;">';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;width:30px;text-align:center;">Lp.</th>';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;">Kod towaru</th>';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;">Nazwa towaru</th>';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;">S/N</th>';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;width:50px;text-align:right;">Ilo\u015b\u0107</th>';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;width:30px;text-align:center;">Jm.</th>';
+      tbl += '<th style="border:1px solid #999;padding:5px 4px;width:150px;">Uwagi</th>';
+      tbl += '</tr></thead><tbody>';
+
+      for (var r = 0; r < data.length; r++) {
+        var row = data[r];
+        tbl += '<tr>';
+        tbl += '<td style="border:1px solid #999;padding:4px;text-align:center;">' + row.lp + '</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(row.kod) + '</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;">' + esc(row.nazwa) + (row.opis ? '<br><span style="font-size:10px;color:#555;">' + esc(row.opis) + '</span>' : '') + '</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(row.sn) + '</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;text-align:right;">' + row.ilosc + '</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;text-align:center;">szt</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(row.uwagi || '') + '</td>';
+        tbl += '</tr>';
+      }
+      tbl += '</tbody></table>';
+      h += tbl;
+      h += '<div style="font-size:13px;margin-bottom:16px;"><b>Podsumowanie ilo\u015bci: ' + (totalQty + totalDmg) + ' szt</b>' + (totalDmg > 0 ? ' <span style="color:#880e4f;">(w tym uszkodzone: ' + totalDmg + ')</span>' : '') + '</div>';
+
+      // === TABELA USZKODZONE ===
+      if (dmgData.length > 0) {
+        h += '<div style="margin-top:10px;border-top:2px solid #880e4f;padding-top:10px;">';
+        h += '<div style="font-size:14px;font-weight:bold;color:#880e4f;margin-bottom:6px;">Pozycje uszkodzone</div>';
+        var dt = '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:6px;">';
+        dt += '<thead><tr style="background:#fce4ec;">';
+        dt += '<th style="border:1px solid #999;padding:5px 4px;width:30px;text-align:center;">Lp.</th>';
+        dt += '<th style="border:1px solid #999;padding:5px 4px;">Kod towaru</th>';
+        dt += '<th style="border:1px solid #999;padding:5px 4px;">Nazwa towaru</th>';
+        dt += '<th style="border:1px solid #999;padding:5px 4px;">S/N</th>';
+        dt += '<th style="border:1px solid #999;padding:5px 4px;width:50px;text-align:right;">Ilo\u015b\u0107</th>';
+        dt += '<th style="border:1px solid #999;padding:5px 4px;width:30px;text-align:center;">Jm.</th>';
+        dt += '</tr></thead><tbody>';
+        for (var dr = 0; dr < dmgData.length; dr++) {
+          var drow = dmgData[dr];
+          dt += '<tr>';
+          dt += '<td style="border:1px solid #999;padding:4px;text-align:center;">' + drow.lp + '</td>';
+          dt += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(drow.kod) + '</td>';
+          dt += '<td style="border:1px solid #999;padding:4px;">' + esc(drow.nazwa) + (drow.opis ? '<br><span style="font-size:10px;color:#880e4f;">' + esc(drow.opis) + '</span>' : '') + '</td>';
+          dt += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(drow.sn) + '</td>';
+          dt += '<td style="border:1px solid #999;padding:4px;text-align:right;">' + drow.ilosc + '</td>';
+          dt += '<td style="border:1px solid #999;padding:4px;text-align:center;">szt</td>';
+          dt += '</tr>';
+        }
+        dt += '</tbody></table>';
+        h += dt;
+        h += '<div style="font-size:13px;"><b style="color:#880e4f;">Pozycje uszkodzone: ' + totalDmg + ' szt</b></div>';
+        h += '</div>';
+      }
+
+      // === PODPISY ===
+      h += '<div style="display:flex;justify-content:space-between;margin-top:40px;font-size:11px;">';
+      h += '<div style="text-align:center;width:45%;border-top:1px dotted #999;padding-top:6px;">Podpis osoby wydającej</div>';
+      h += '<div style="text-align:center;width:45%;border-top:1px dotted #999;padding-top:6px;">Podpis osoby odbierającej</div>';
+      h += '</div>';
+
+      h += '<div id="raportPrintFooter" style="display:none;margin-top:20px;font-size:10px;color:#999;">Wygenerowano: ' + new Date().toLocaleString('pl-PL') + '</div>';
+
+      // Użyj istniejącego modalu raportu
+      document.getElementById('raportTitle').textContent = 'Lista narzędzi — ' + listName;
+      document.getElementById('raportContent').innerHTML = h;
+      currentRaportTitle = 'Lista narzędzi — ' + listName;
+      currentRaportData = data.concat(dmgData);
+      currentRaportColumns = [{ key: 'lp', label: 'Lp.' }, { key: 'kod', label: 'Kod' }, { key: 'nazwa', label: 'Nazwa' }, { key: 'sn', label: 'S/N' }, { key: 'opis', label: 'Opis' }, { key: 'ilosc', label: 'Ilo\u015b\u0107' }, { key: 'jm', label: 'Jm.' }, { key: 'uwagi', label: 'Uwagi' }];
+      openModal('modalRaport');
+    }
+
+    function showRaportWUzyciu() {
+      var active = allLogEntries.filter(function (e) { return e.status === 'Wydane'; });
+
+      var data = [];
+      for (var i = 0; i < active.length; i++) {
+        var e = active[i];
+        data.push({
+          lp: i + 1,
+          osoba: e.osoba,
+          nazwaSys: e.nazwaSys,
+          sn: e.sn || '',
+          kategoria: e.kategoria,
+          ilosc: e.ilosc,
+          dataWydania: e.dataWydania
+        });
+      }
+
+      showRaport(
+        'Narzędzia aktualnie w użyciu',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'osoba', label: 'Osoba' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'sn', label: 'SN' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'ilosc', label: 'Ilość' },
+          { key: 'dataWydania', label: 'Data wydania' }
+        ],
+        data
+      );
+    }
+
+    function showRaportNajczesciej() {
+      var counts = {};
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (!e.nazwaSys) continue;
+        if (!counts[e.nazwaSys]) counts[e.nazwaSys] = { nazwaSys: e.nazwaSys, kategoria: e.kategoria, count: 0, totalQty: 0 };
+        counts[e.nazwaSys].count++;
+        counts[e.nazwaSys].totalQty += e.ilosc;
+      }
+
+      var data = [];
+      for (var key in counts) data.push(counts[key]);
+      data.sort(function (a, b) { return b.count - a.count; });
+      for (var i = 0; i < data.length; i++) data[i].lp = i + 1;
+
+      showRaport(
+        'Najczęściej wydawane narzędzia',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'count', label: 'Liczba operacji' },
+          { key: 'totalQty', label: 'Łączna ilość' }
+        ],
+        data
+      );
+    }
+
+    function showRaportNajrzadziej() {
+      var counts = {};
+      for (var i = 0; i < allKatalog.length; i++) {
+        var k = allKatalog[i];
+        if (!counts[k.nazwaSys]) counts[k.nazwaSys] = { nazwaSys: k.nazwaSys, kategoria: k.kategoria, count: 0, totalQty: 0 };
+      }
+
+      for (var i = 0; i < allLogEntries.length; i++) {
+        var e = allLogEntries[i];
+        if (!e.nazwaSys) continue;
+        if (!counts[e.nazwaSys]) counts[e.nazwaSys] = { nazwaSys: e.nazwaSys, kategoria: e.kategoria, count: 0, totalQty: 0 };
+        counts[e.nazwaSys].count++;
+        counts[e.nazwaSys].totalQty += e.ilosc;
+      }
+
+      var data = [];
+      for (var key in counts) data.push(counts[key]);
+      data.sort(function (a, b) { return a.count - b.count; });
+      for (var i = 0; i < data.length; i++) data[i].lp = i + 1;
+
+      showRaport(
+        'Najrzadziej wydawane narzędzia',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Narzędzie' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'count', label: 'Liczba operacji' },
+          { key: 'totalQty', label: 'Łączna ilość' }
+        ],
+        data
+      );
+    }
+
+    function showRaportInwentaryzacja() {
+      var data = [];
+      for (var i = 0; i < allKatalog.length; i++) {
+        var k = allKatalog[i];
+        var wydane = k.stanPoczatkowy - k.aktualnieNaStanie;
+        data.push({
+          lp: i + 1,
+          nazwaSys: k.nazwaSys,
+          nazwaWys: k.nazwaWys,
+          sn: k.sn || '',
+          kategoria: k.kategoria,
+          stanPoczatkowy: k.stanPoczatkowy,
+          aktualnie: k.aktualnieNaStanie,
+          wydane: wydane > 0 ? wydane : 0
+        });
+      }
+
+      showRaport(
+        'Inwentaryzacja — stan magazynu',
+        [
+          { key: 'lp', label: 'Lp.' },
+          { key: 'nazwaSys', label: 'Nazwa systemowa' },
+          { key: 'nazwaWys', label: 'Nazwa wyświetlana' },
+          { key: 'sn', label: 'SN' },
+          { key: 'kategoria', label: 'Kategoria' },
+          { key: 'stanPoczatkowy', label: 'Stan pocz.' },
+          { key: 'aktualnie', label: 'Na stanie' },
+          { key: 'wydane', label: 'Wydane' }
+        ],
+        data
+      );
+    }
+
+    function printRaport(contentId) {
+      var content = document.getElementById(contentId);
+      if (!content) return;
+      var rawTitle = document.getElementById('raportTitle')
+        ? document.getElementById('raportTitle').textContent : 'Lista narzędzi';
+      var dzis = new Date().toLocaleDateString('pl-PL').replace(/\./g, '-');
+      var title = rawTitle.replace(/[—–]/g, '-') + ' ' + dzis;
+      var w = window.open('', '_blank');
+      w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + title + '</title><style>'
+        + '@page{size:A4;margin:0 0 10mm 0;@bottom-center{content:"Strona " counter(page) " z " counter(pages);font-size:9px;color:#999}}'
+        + 'body{font-family:Arial,sans-serif;color:#222;margin:0;padding:12mm 12mm 4mm 12mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}'
+        + 'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}'
+        + 'th,td{border:1px solid #999;padding:5px 4px}'
+        + 'th{background:#f0f0f0;font-weight:bold}'
+        + 'tr{page-break-inside:avoid}'
+        + 'thead{display:table-header-group}'
+        + '.sig-line{text-align:center;width:45%;border-top:1px dotted #999;padding-top:6px}'
+        + '</style></head><body>'
+        + content.innerHTML
+        + '</body></html>');
+      w.document.close();
+      w.document.title = title;
+      setTimeout(function() { w.print(); }, 300);
+    }
+
+    function exportRaportExcel() {
+      if (!currentRaportData.length || !currentRaportColumns.length) {
+        toast('Brak danych do eksportu', 'error');
+        return;
+      }
+
+      var xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      xml += '<?mso-application progid="Excel.Sheet"?>\n';
+      xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+      xml += '<Styles><Style ss:ID="hdr"><Font ss:Bold="1"/><Interior ss:Color="#f0f0f0" ss:Pattern="Solid"/></Style></Styles>\n';
+      xml += '<Worksheet ss:Name="Raport"><Table>\n';
+
+      // Header
+      xml += '<Row>';
+      for (var c = 0; c < currentRaportColumns.length; c++) {
+        xml += '<Cell ss:StyleID="hdr"><Data ss:Type="String">' + esc(currentRaportColumns[c].label) + '</Data></Cell>';
+      }
+      xml += '</Row>\n';
+
+      // Data
+      for (var i = 0; i < currentRaportData.length; i++) {
+        var row = currentRaportData[i];
+        xml += '<Row>';
+        for (var j = 0; j < currentRaportColumns.length; j++) {
+          var val = row[currentRaportColumns[j].key];
+          var isNum = typeof val === 'number';
+          xml += '<Cell><Data ss:Type="' + (isNum ? 'Number' : 'String') + '">' + (val != null ? esc(String(val)) : '') + '</Data></Cell>';
+        }
+        xml += '</Row>\n';
+      }
+
+      xml += '</Table></Worksheet></Workbook>';
+
+      var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = currentRaportTitle.replace(/[^a-zA-Z0-9\u0105\u0107\u0119\u0142\u0144\u00f3\u015b\u017a\u017c\u0104\u0106\u0118\u0141\u0143\u00d3\u015a\u0179\u017b _-]/g, '_') + '.xls';
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+</script>
