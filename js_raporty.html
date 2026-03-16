@@ -488,23 +488,18 @@
     }
 
     function showRaportListy(active) {
-      // Rozdziel normalne i uszkodzone
-      var normalEntries = [];
-      var damagedEntries = [];
-      for (var i = 0; i < active.length; i++) {
-        if (active[i].status === 'Uszkodzone') damagedEntries.push(active[i]);
-        else normalEntries.push(active[i]);
-      }
-
-      // Grupuj normalne wydania
+      // Grupuj wszystkie wpisy (wydane + uszkodzone razem)
       var isZam = currentDetailOsoba && isZamowieniaType(currentDetailOsoba.imie);
       var groups = {};
-      for (var i = 0; i < normalEntries.length; i++) {
-        var e = normalEntries[i];
-        // Zamówienia: grupuj po nazwaWys (nazwie wyświetlanej), ignoruj SN='???'
-        var key = isZam ? (e.nazwaWys || e.nazwaSys) : (e.sn ? (e.nazwaSys + '|' + e.sn) : (e.nazwaWys || e.nazwaSys));
+      for (var i = 0; i < active.length; i++) {
+        var e = active[i];
+        var isDmg = e.status === 'Uszkodzone';
+        // Uszkodzone: osobny klucz (nie łącz z normalnymi)
+        var key = isZam ? ((e.nazwaWys || e.nazwaSys) + (isDmg ? '|DMG' : ''))
+          : (e.sn ? (e.nazwaSys + '|' + e.sn + (isDmg ? '|DMG' : ''))
+          : ((e.nazwaWys || e.nazwaSys) + (isDmg ? '|DMG' : '')));
         if (!groups[key]) {
-          groups[key] = { nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys, sn: isZam ? '' : e.sn, ilosc: 0, kategoria: e.kategoria, uwagi: [] };
+          groups[key] = { nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys, sn: isZam ? '' : e.sn, ilosc: 0, kategoria: e.kategoria, uwagi: [], damaged: isDmg };
         }
         groups[key].ilosc += e.ilosc;
         if (e.opisUszkodzenia && e.opisUszkodzenia.trim()) groups[key].uwagi.push(e.opisUszkodzenia.trim());
@@ -523,10 +518,11 @@
         }
 
         var uwagi = g.uwagi.length ? g.uwagi.join('; ') : '';
+        if (g.damaged) uwagi = (uwagi ? 'USZKODZONE — ' + uwagi : 'USZKODZONE');
         if (isZam || g.sn || katItems.length <= 1) {
           var ki0 = katItems[0] || {};
           lp++;
-          data.push({ lp: lp, kod: ki0.nazwaSys || (katItems.length ? g.nazwaSys : '-'), nazwa: ki0.nazwaWys || g.nazwaWys, sn: g.sn || '', opis: ki0.opis || '', uwagi: uwagi, ilosc: g.ilosc, jm: 'szt' });
+          data.push({ lp: lp, kod: ki0.nazwaSys || (katItems.length ? g.nazwaSys : '-'), nazwa: ki0.nazwaWys || g.nazwaWys, sn: g.sn || '', opis: ki0.opis || '', uwagi: uwagi, ilosc: g.ilosc, jm: 'szt', damaged: g.damaged });
         } else {
           var transfers = {};
           for (var ti = 0; ti < katItems.length; ti++) {
@@ -542,35 +538,19 @@
           for (var si = 0; si < sorted.length && remaining > 0; si++) {
             var st = sorted[si];
             var take = Math.min(remaining, st.qty);
-            if (take > 0) { lp++; data.push({ lp: lp, kod: st.kod || g.nazwaSys, nazwa: g.nazwaWys, sn: '', opis: st.opis || '', uwagi: si === 0 ? uwagi : '', ilosc: take, jm: 'szt' }); remaining -= take; }
+            if (take > 0) { lp++; data.push({ lp: lp, kod: st.kod || g.nazwaSys, nazwa: g.nazwaWys, sn: '', opis: st.opis || '', uwagi: si === 0 ? uwagi : '', ilosc: take, jm: 'szt', damaged: g.damaged }); remaining -= take; }
           }
-          if (remaining > 0) { lp++; data.push({ lp: lp, kod: g.nazwaSys, nazwa: g.nazwaWys, sn: '', opis: '', uwagi: '', ilosc: remaining, jm: 'szt' }); }
+          if (remaining > 0) { lp++; data.push({ lp: lp, kod: g.nazwaSys, nazwa: g.nazwaWys, sn: '', opis: '', uwagi: '', ilosc: remaining, jm: 'szt', damaged: g.damaged }); }
         }
-      }
-
-      // Grupuj uszkodzone
-      var dmgGroups = {};
-      for (var di = 0; di < damagedEntries.length; di++) {
-        var de = damagedEntries[di];
-        var dk = de.sn ? (de.nazwaSys + '|' + de.sn) : (de.nazwaWys || de.nazwaSys);
-        if (!dmgGroups[dk]) {
-          dmgGroups[dk] = { nazwaWys: de.nazwaWys || de.nazwaSys, nazwaSys: de.nazwaSys, sn: de.sn, ilosc: 0, opis: de.opisUszkodzenia || '' };
-        }
-        dmgGroups[dk].ilosc += de.ilosc;
-      }
-      var dmgData = [];
-      var dlp = 0;
-      for (var dk2 in dmgGroups) {
-        dlp++;
-        var dg = dmgGroups[dk2];
-        dmgData.push({ lp: dlp, kod: dg.nazwaSys, nazwa: dg.nazwaWys, sn: dg.sn || '', opis: dg.opis, ilosc: dg.ilosc, jm: 'szt' });
       }
 
       // Suma
       var totalQty = 0;
-      for (var s = 0; s < data.length; s++) totalQty += data[s].ilosc;
       var totalDmg = 0;
-      for (var s2 = 0; s2 < dmgData.length; s2++) totalDmg += dmgData[s2].ilosc;
+      for (var s = 0; s < data.length; s++) {
+        totalQty += data[s].ilosc;
+        if (data[s].damaged) totalDmg += data[s].ilosc;
+      }
 
       var listName = stripListPrefix(currentDetailOsoba.imie);
       var dzis = new Date().toLocaleDateString('pl-PL');
@@ -606,49 +586,20 @@
 
       for (var r = 0; r < data.length; r++) {
         var row = data[r];
-        tbl += '<tr>';
+        var rowBg = row.damaged ? ' style="background:#fff5f5;"' : '';
+        tbl += '<tr' + rowBg + '>';
         tbl += '<td style="border:1px solid #999;padding:4px;text-align:center;">' + row.lp + '</td>';
         tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(row.kod) + '</td>';
         tbl += '<td style="border:1px solid #999;padding:4px;">' + esc(row.nazwa) + (row.opis ? '<br><span style="font-size:10px;color:#555;">' + esc(row.opis) + '</span>' : '') + '</td>';
         tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(row.sn) + '</td>';
         tbl += '<td style="border:1px solid #999;padding:4px;text-align:right;">' + row.ilosc + '</td>';
         tbl += '<td style="border:1px solid #999;padding:4px;text-align:center;">szt</td>';
-        tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(row.uwagi || '') + '</td>';
+        tbl += '<td style="border:1px solid #999;padding:4px;font-size:11px;' + (row.damaged ? 'color:#b91c1c;font-weight:bold;' : '') + '">' + esc(row.uwagi || '') + '</td>';
         tbl += '</tr>';
       }
       tbl += '</tbody></table>';
       h += tbl;
-      h += '<div style="font-size:13px;margin-bottom:16px;"><b>Podsumowanie ilo\u015bci: ' + (totalQty + totalDmg) + ' szt</b>' + (totalDmg > 0 ? ' <span style="color:#880e4f;">(w tym uszkodzone: ' + totalDmg + ')</span>' : '') + '</div>';
-
-      // === TABELA USZKODZONE ===
-      if (dmgData.length > 0) {
-        h += '<div style="margin-top:10px;border-top:2px solid #880e4f;padding-top:10px;">';
-        h += '<div style="font-size:14px;font-weight:bold;color:#880e4f;margin-bottom:6px;">Pozycje uszkodzone</div>';
-        var dt = '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:6px;">';
-        dt += '<thead><tr style="background:#fce4ec;">';
-        dt += '<th style="border:1px solid #999;padding:5px 4px;width:30px;text-align:center;">Lp.</th>';
-        dt += '<th style="border:1px solid #999;padding:5px 4px;">Kod towaru</th>';
-        dt += '<th style="border:1px solid #999;padding:5px 4px;">Nazwa towaru</th>';
-        dt += '<th style="border:1px solid #999;padding:5px 4px;">S/N</th>';
-        dt += '<th style="border:1px solid #999;padding:5px 4px;width:50px;text-align:right;">Ilo\u015b\u0107</th>';
-        dt += '<th style="border:1px solid #999;padding:5px 4px;width:30px;text-align:center;">Jm.</th>';
-        dt += '</tr></thead><tbody>';
-        for (var dr = 0; dr < dmgData.length; dr++) {
-          var drow = dmgData[dr];
-          dt += '<tr>';
-          dt += '<td style="border:1px solid #999;padding:4px;text-align:center;">' + drow.lp + '</td>';
-          dt += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(drow.kod) + '</td>';
-          dt += '<td style="border:1px solid #999;padding:4px;">' + esc(drow.nazwa) + (drow.opis ? '<br><span style="font-size:10px;color:#880e4f;">' + esc(drow.opis) + '</span>' : '') + '</td>';
-          dt += '<td style="border:1px solid #999;padding:4px;font-size:11px;">' + esc(drow.sn) + '</td>';
-          dt += '<td style="border:1px solid #999;padding:4px;text-align:right;">' + drow.ilosc + '</td>';
-          dt += '<td style="border:1px solid #999;padding:4px;text-align:center;">szt</td>';
-          dt += '</tr>';
-        }
-        dt += '</tbody></table>';
-        h += dt;
-        h += '<div style="font-size:13px;"><b style="color:#880e4f;">Pozycje uszkodzone: ' + totalDmg + ' szt</b></div>';
-        h += '</div>';
-      }
+      h += '<div style="font-size:13px;margin-bottom:16px;"><b>Podsumowanie ilo\u015bci: ' + totalQty + ' szt</b>' + (totalDmg > 0 ? ' <span style="color:#880e4f;">(w tym uszkodzone: ' + totalDmg + ')</span>' : '') + '</div>';
 
       // === PODPISY ===
       h += '<div style="display:flex;justify-content:space-between;margin-top:40px;font-size:11px;">';
@@ -662,7 +613,7 @@
       document.getElementById('raportTitle').textContent = 'Lista narzędzi — ' + listName;
       document.getElementById('raportContent').innerHTML = h;
       currentRaportTitle = 'Lista narzędzi — ' + listName;
-      currentRaportData = data.concat(dmgData);
+      currentRaportData = data;
       currentRaportColumns = [{ key: 'lp', label: 'Lp.' }, { key: 'kod', label: 'Kod' }, { key: 'nazwa', label: 'Nazwa' }, { key: 'sn', label: 'S/N' }, { key: 'opis', label: 'Opis' }, { key: 'ilosc', label: 'Ilo\u015b\u0107' }, { key: 'jm', label: 'Jm.' }, { key: 'uwagi', label: 'Uwagi' }];
       openModal('modalRaport');
     }
