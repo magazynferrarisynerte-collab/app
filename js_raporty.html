@@ -496,13 +496,15 @@
         else normalEntries.push(active[i]);
       }
 
-      // Grupuj normalne wydania wg nazwaWys
+      // Grupuj normalne wydania
+      var isZam = currentDetailOsoba && isZamowieniaType(currentDetailOsoba.imie);
       var groups = {};
       for (var i = 0; i < normalEntries.length; i++) {
         var e = normalEntries[i];
-        var key = e.sn ? (e.nazwaSys + '|' + e.sn) : (e.nazwaWys || e.nazwaSys);
+        // Zamówienia: zawsze grupuj po nazwaSys (kodzie), ignoruj SN='???'
+        var key = isZam ? e.nazwaSys : (e.sn ? (e.nazwaSys + '|' + e.sn) : (e.nazwaWys || e.nazwaSys));
         if (!groups[key]) {
-          groups[key] = { nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys, sn: e.sn, ilosc: 0, kategoria: e.kategoria, uwagi: [] };
+          groups[key] = { nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys, sn: isZam ? '' : e.sn, ilosc: 0, kategoria: e.kategoria, uwagi: [] };
         }
         groups[key].ilosc += e.ilosc;
         if (e.opisUszkodzenia && e.opisUszkodzenia.trim()) groups[key].uwagi.push(e.opisUszkodzenia.trim());
@@ -521,7 +523,7 @@
         }
 
         var uwagi = g.uwagi.length ? g.uwagi.join('; ') : '';
-        if (g.sn || katItems.length <= 1) {
+        if (isZam || g.sn || katItems.length <= 1) {
           var ki0 = katItems[0] || {};
           lp++;
           data.push({ lp: lp, kod: ki0.nazwaSys || (katItems.length ? g.nazwaSys : '-'), nazwa: ki0.nazwaWys || g.nazwaWys, sn: g.sn || '', opis: ki0.opis || '', uwagi: uwagi, ilosc: g.ilosc, jm: 'szt' });
