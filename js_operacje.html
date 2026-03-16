@@ -1,0 +1,742 @@
+<script>
+    /* =========================
+       MODAL WYPOŻYCZENIA
+    ========================= */
+    function openWypozyczModal() {
+      wypOsobaId = null;
+      wypOsobaName = '';
+      wypCartItems = [];
+      currentSelectedGroup = null;
+      document.getElementById('wypOsobaSearch').value = '';
+      document.getElementById('wypStep1').style.display = 'block';
+      document.getElementById('wypStep2').style.display = 'none';
+      document.getElementById('wypDynamicFields').style.display = 'none';
+      document.getElementById('wypLastAdded').style.display = 'none';
+      renderWypOsobyList(allOsoby);
+      openModal('modalWypozycz');
+
+    }
+
+    function wypFromOsoba() {
+      if (!currentDetailOsoba) return;
+      closeModal('modalOsobaDetail');
+      wypCartItems = [];
+      currentSelectedGroup = null;
+      wypSelectOsoba(currentDetailOsoba.id, currentDetailOsoba.imie);
+      openModal('modalWypozycz');
+    }
+
+    function renderWypOsobyList(data) {
+      var container = document.getElementById('wypOsobaList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak osób — najpierw dodaj kogoś w zakładce Osoby</div>';
+        return;
+      }
+      var counts = getActiveCountByPerson();
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var o = data[i];
+        var cnt = counts[o.imie] || 0;
+        var isList = isAnyListType(o.imie);
+        var dName = stripListPrefix(o.imie);
+        h += '<div class="picker-item" onclick="wypSelectOsoba(\'' + esc(o.id) + '\',\'' + esc(o.imie) + '\')">'
+          + '<div>' + getListBadge(o.imie) + '<span style="font-weight:bold;">' + esc(dName) + '</span>'
+          + (cnt > 0 ? ' <span class="status-badge status-borrowed" style="font-size:11px;">' + (isList ? 'Narzędzi: ' : 'Wypożyczone: ') + cnt + '</span>' : '')
+          + '</div>'
+          + (isList ? '' : '<span style="color:#636e72;">' + esc(o.telefon) + '</span>')
+          + '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function filterWypOsoby() {
+      var q = document.getElementById('wypOsobaSearch').value;
+      if (!q) { renderWypOsobyList(allOsoby); return; }
+      renderWypOsobyList(scoredSearch(allOsoby, ['imie', 'telefon', 'lokalizacja', 'email'], q));
+    }
+
+    function resetWypKatFilters() {
+      currentWypKategoria = 'all';
+      var btns = document.getElementById('wypKatFilters');
+      if (btns) btns.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      var first = btns && btns.querySelector('.filter-btn');
+      if (first) first.classList.add('active');
+    }
+
+    function wypSkipOsoba() {
+      wypOsobaId = null;
+      wypOsobaName = '';
+      document.getElementById('wypPersonName').innerHTML = '<span style="color:#f59e0b;font-weight:bold;">Bez osoby (zużywalne)</span>';
+      document.getElementById('wypStep1').style.display = 'none';
+      document.getElementById('wypStep2').style.display = 'flex';
+      document.getElementById('wypStep2').classList.add('narz-collapsed');
+      document.getElementById('wypNarzSearch').value = '';
+      document.getElementById('wypWhatsBtn').style.display = 'none';
+      resetWypKatFilters();
+      renderWypNarzList(getFilteredGrouped());
+      renderWypCart();
+      setupNarzScrollCollapse();
+    }
+
+    function wypSelectOsoba(id, name) {
+      wypOsobaId = id;
+      wypOsobaName = name;
+      _loadListaCart();
+      document.getElementById('wypPersonName').innerHTML = '<b>' + esc(name) + '</b>';
+      document.getElementById('wypStep1').style.display = 'none';
+      document.getElementById('wypStep2').style.display = 'flex';
+      document.getElementById('wypStep2').classList.add('narz-collapsed');
+      document.getElementById('wypNarzSearch').value = '';
+      resetWypKatFilters();
+      var dmgBtn = document.getElementById('wypDmgBtn');
+      if (dmgBtn) dmgBtn.style.display = isListaType(name) ? '' : 'none';
+      // Show/hide WhatsApp button based on phone
+      var osoba = null;
+      for (var i = 0; i < allOsoby.length; i++) {
+        if (allOsoby[i].id === id) { osoba = allOsoby[i]; break; }
+      }
+      var hasPhone = osoba && osoba.telefon && osoba.telefon.trim().length > 0;
+      document.getElementById('wypWhatsBtn').style.display = hasPhone ? 'block' : 'none';
+      document.getElementById('wypDynamicFields').style.display = 'none';
+      renderWypNarzList(getFilteredGrouped());
+      renderWypCart();
+      setupNarzScrollCollapse();
+    }
+
+    function setupNarzScrollCollapse() {
+      var narzList = document.getElementById('wypNarzList');
+      narzList.onscroll = function () {
+        var step2 = document.getElementById('wypStep2');
+        if (narzList.scrollTop > 30) {
+          if (!step2.classList.contains('narz-collapsed')) {
+            step2.classList.add('narz-collapsed');
+            document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+            renderWypLastAdded();
+          }
+        }
+      };
+    }
+
+    function wypExpandUI() {
+      document.getElementById('wypStep2').classList.remove('narz-collapsed');
+    }
+
+    function wypCollapseToNarz() {
+      document.getElementById('wypStep2').classList.add('narz-collapsed');
+      document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+      renderWypLastAdded();
+    }
+
+    function _listaCartKey() {
+      return wypOsobaName ? 'listaCart_' + wypOsobaName : '';
+    }
+    function _saveListaCart() {
+      if (!wypOsobaName || !isAnyListType(wypOsobaName)) return;
+      try { localStorage.setItem(_listaCartKey(), JSON.stringify(wypCartItems)); } catch(e) {}
+    }
+    function _loadListaCart() {
+      if (!wypOsobaName || !isAnyListType(wypOsobaName)) return;
+      try {
+        var saved = localStorage.getItem(_listaCartKey());
+        if (saved) wypCartItems = JSON.parse(saved);
+      } catch(e) { wypCartItems = []; }
+    }
+    function _clearListaCart() {
+      if (!wypOsobaName || !isAnyListType(wypOsobaName)) return;
+      try { localStorage.removeItem(_listaCartKey()); } catch(e) {}
+    }
+
+    function wypClearCart() {
+      wypCartItems = [];
+      _clearListaCart();
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+      wypCollapseToNarz();
+    }
+
+    function wypAddCustom() {
+      var df = document.getElementById('wypDynamicFields');
+      df.innerHTML = '<div style="background:#f3f0ff;padding:10px 12px;border-radius:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+        + '<b style="font-size:14px;color:#8b5cf6;">Dodaj spoza listy</b>'
+        + '<span onclick="document.getElementById(\'wypDynamicFields\').style.display=\'none\'" style="cursor:pointer;font-size:20px;color:#636e72;">&times;</span>'
+        + '</div>'
+        + '<input type="text" id="customNazwa" placeholder="Nazwa narzędzia" style="width:100%;height:40px;font-size:14px;border:1px solid #d1d5db;border-radius:8px;padding:0 10px;margin-bottom:6px;">'
+        + '<div style="display:flex;gap:6px;align-items:center;">'
+        + '<input type="number" id="customQty" value="1" min="1" style="width:60px;height:36px;font-size:14px;border:1px solid #d1d5db;border-radius:8px;padding:0 8px;text-align:center;">'
+        + '<button onclick="wypCustomSubmit()" style="flex:1;height:36px;background:#8b5cf6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;">Dodaj</button>'
+        + '</div></div>';
+      df.style.display = 'block';
+      document.getElementById('customNazwa').focus();
+    }
+
+    function wypCustomSubmit() {
+      var nazwa = document.getElementById('customNazwa').value.trim();
+      if (!nazwa) { toast('Wpisz nazwę', 'error'); return; }
+      var qty = parseInt(document.getElementById('customQty').value, 10) || 1;
+      wypCartItems.push({
+        nazwaWys: nazwa,
+        sn: '',
+        qty: qty,
+        max: 9999,
+        kategoria: 'N',
+        flaga: false,
+        photoBase64: null,
+        custom: true
+      });
+      document.getElementById('wypDynamicFields').style.display = 'none';
+      _saveListaCart();
+      renderWypCart();
+      document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+      renderWypLastAdded();
+      toast('Dodano: ' + nazwa, 'success');
+    }
+
+    function wypChangeOsoba() {
+      document.getElementById('wypStep1').style.display = 'block';
+      document.getElementById('wypStep2').style.display = 'none';
+      document.getElementById('wypDynamicFields').style.display = 'none';
+      wypOsobaId = null;
+      wypOsobaName = '';
+    }
+
+    function renderWypNarzList(data) {
+      var container = document.getElementById('wypNarzList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak narzędzi</div>';
+        return;
+      }
+      // Pre-filter: remove out-of-stock and already-in-cart E items
+      var isZam = isZamowieniaType(wypOsobaName);
+      var visible = [];
+      for (var i = 0; i < data.length; i++) {
+        var item = data[i];
+        if (item.aktualnieNaStanie <= 0 && !isZam) continue;
+        if (item.kategoria === 'E' && item.sn && !isZam) {
+          var alreadyInCart = false;
+          for (var c = 0; c < wypCartItems.length; c++) {
+            if (wypCartItems[c].sn === item.sn) { alreadyInCart = true; break; }
+          }
+          if (alreadyInCart) continue;
+        }
+        visible.push(item);
+      }
+      lastWypNarzFiltered = visible;
+      var h = '';
+      for (var i = 0; i < visible.length; i++) {
+        var item = visible[i];
+        var displayName = simplifyName(item.nazwaWys) || item.nazwaWys;
+        var subtext = item.nazwaSys || '';
+        if (item.sn && !isZam) {
+          subtext += ' | SN: ' + item.sn;
+        }
+
+        var badge = isZam
+          ? '<span class="status-badge" style="background:#ede9fe;color:#7c3aed;">Zamów</span>'
+          : item._damaged
+            ? '<span class="status-badge status-damaged">' + item.aktualnieNaStanie + ' szt.</span>'
+            : '<span class="status-badge status-available">' + item.aktualnieNaStanie + ' szt.</span>';
+        h += '<div class="picker-item" onclick="wypSelectToolIdx(' + i + ')">'
+          + '<div>'
+          + '<div style="font-weight:bold;">' + esc(displayName) + ' ' + getKategoriaBadge(item.kategoria) + '</div>'
+          + (subtext ? '<div style="font-size:11px;color:#636e72;">' + esc(subtext) + '</div>' : '')
+          + (item._damaged && item.opis ? '<div style="font-size:11px;color:#ef4444;">' + esc(item.opis) + '</div>' : '')
+          + '</div>'
+          + badge
+          + '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function wypSelectToolIdx(idx) {
+      var item = lastWypNarzFiltered[idx];
+      if (!item) return;
+
+      var nazwaWys = item.nazwaWys;
+      var kat = item.kategoria;
+      var sn = item.sn || '';
+      var isZam = isZamowieniaType(wypOsobaName);
+      var cartSn = (isZam && sn) ? '???' : sn;
+
+      // E z SN — sprawdź duplikat (nie dla Zamówień)
+      if (sn && !isZam) {
+        for (var i = 0; i < wypCartItems.length; i++) {
+          if (wypCartItems[i].sn === sn) {
+            toast('Ten egzemplarz jest już w koszyku', 'error');
+            return;
+          }
+        }
+      }
+
+      // N/Z lub Zamówienia (E staje się grupowalne) — zwiększ ilość jeśli już jest w koszyku
+      if ((!sn || isZam) && (kat !== 'E' || isZam) && !item._damaged) {
+        for (var j = 0; j < wypCartItems.length; j++) {
+          if (wypCartItems[j].nazwaWys === nazwaWys && (!wypCartItems[j].sn || wypCartItems[j].sn === '???') && !wypCartItems[j].damaged) {
+            if (!isZam && wypCartItems[j].qty >= wypCartItems[j].max) {
+              toast('Maksymalna ilość na stanie', 'error');
+              return;
+            }
+            wypCartItems[j].qty += 1;
+            renderWypCart();
+            renderWypNarzList(getFilteredGrouped());
+            document.getElementById('wypCollapsedCount').textContent = wypCartItems.length;
+            renderWypLastAdded();
+            toast('Zwiększono ilość: ' + (simplifyName(nazwaWys) || nazwaWys), 'success');
+            return;
+          }
+        }
+      }
+
+      // Uszkodzone: sprawdź czy ta sama pozycja logu nie jest już w koszyku
+      if (item._damaged && item._logId) {
+        for (var d = 0; d < wypCartItems.length; d++) {
+          if (wypCartItems[d]._logId === item._logId) {
+            toast('Ta uszkodzona pozycja jest już w koszyku', 'error');
+            return;
+          }
+        }
+      }
+
+      wypCartItems.push({
+        nazwaWys: nazwaWys,
+        sn: cartSn,
+        qty: item._damaged ? (item.aktualnieNaStanie || 1) : 1,
+        max: isZam ? 99999 : item.aktualnieNaStanie,
+        kategoria: kat,
+        flaga: isZam ? false : (item.flaga || false),
+        photoBase64: null,
+        damaged: item._damaged || false,
+        _logId: item._logId || null,
+        opisUszkodzenia: item._damaged ? (item.opis || '') : ''
+      });
+
+      _saveListaCart();
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+      toast('Dodano: ' + (simplifyName(nazwaWys) || nazwaWys), 'success');
+      renderWypLastAdded();
+    }
+
+    function wypFilteredList() {
+      var q = document.getElementById('wypNarzSearch').value;
+      if (currentWypKategoria === 'DMG') {
+        // Uszkodzone: pozycje z logu
+        var dmg = allLogEntries.filter(function (e) { return e.status === 'Uszkodzone'; });
+        // Mapuj na format zgodny z katalogiem
+        var mapped = dmg.map(function (e) {
+          return {
+            nazwaWys: e.nazwaWys || e.nazwaSys,
+            nazwaSys: e.nazwaSys,
+            kategoria: e.kategoria || 'N',
+            aktualnieNaStanie: e.ilosc || 1,
+            sn: e.sn || '',
+            flaga: false,
+            tagi: '',
+            opis: e.opisUszkodzenia || '',
+            _damaged: true,
+            _logId: e.idOp
+          };
+        });
+        if (q) {
+          mapped = scoredSearch(mapped, ['nazwaSys', 'nazwaWys', 'sn'], q);
+        }
+        return mapped;
+      }
+      var filtered = allKatalog;
+      if (currentWypKategoria !== 'all') {
+        filtered = filtered.filter(function (n) { return n.kategoria === currentWypKategoria; });
+      }
+      if (q) {
+        filtered = scoredSearch(filtered, ['nazwaSys', 'nazwaWys', 'kategoria', 'sn', 'tagi'], q);
+      }
+      // Dla Listy: dołącz uszkodzone do "Wszystkie"
+      var isLista = isListaType(wypOsobaName);
+      if (isLista && currentWypKategoria === 'all') {
+        var dmg = allLogEntries.filter(function (e) { return e.status === 'Uszkodzone'; });
+        var mapped = dmg.map(function (e) {
+          return {
+            nazwaWys: e.nazwaWys || e.nazwaSys, nazwaSys: e.nazwaSys,
+            kategoria: e.sn ? 'E' : (e.kategoria || 'N'), aktualnieNaStanie: e.ilosc || 1,
+            sn: e.sn || '', flaga: false, tagi: '', opis: e.opisUszkodzenia || '',
+            _damaged: true, _logId: e.idOp
+          };
+        });
+        if (q) mapped = scoredSearch(mapped, ['nazwaSys', 'nazwaWys', 'sn'], q);
+        filtered = filtered.concat(mapped);
+      }
+      return filtered;
+    }
+
+    function filterWypNarz() {
+      var list = document.getElementById('wypNarzList');
+      if (list) list.scrollTop = 0;
+      renderWypNarzList(getFilteredGrouped());
+    }
+
+    function filterWypKategoria(kat, btn) {
+      currentWypKategoria = kat;
+      document.getElementById('wypKatFilters').querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      filterWypNarz();
+    }
+
+    function getFilteredGrouped() {
+      var flat = wypFilteredList();
+      var groups = {};
+      var result = [];
+      var isZam = isZamowieniaType(wypOsobaName);
+      for (var i = 0; i < flat.length; i++) {
+        var item = flat[i];
+        // Group all items by kategoria + name (+ SN for E, except Zamówienia)
+        var rawName = (simplifyName(item.nazwaWys) || item.nazwaWys || item.nazwaSys || '').replace(/\s+/g, ' ').trim();
+        var key = item.kategoria + '|' + rawName + (item.sn && !isZam ? '|SN:' + item.sn : '');
+        if (!groups[key]) {
+          groups[key] = {
+            nazwaWys: item.nazwaWys,
+            nazwaSys: item.nazwaSys,
+            kategoria: item.kategoria,
+            aktualnieNaStanie: 0,
+            flaga: item.flaga,
+            sn: isZam ? '' : (item.sn || ''),
+            tagi: item.tagi,
+            opis: item.opis,
+            przesun: '',
+            dataPrzesun: '',
+            _grouped: true
+          };
+          result.push(groups[key]);
+        }
+        groups[key].aktualnieNaStanie += item.aktualnieNaStanie;
+        if (item.flaga) groups[key].flaga = true;
+      }
+      return result;
+    }
+
+    function renderWypLastAdded() {
+      var laEl = document.getElementById('wypLastAdded');
+      if (!wypCartItems.length) { laEl.style.display = 'none'; return; }
+      var idx = wypCartItems.length - 1;
+      var c = wypCartItems[idx];
+      var laName = simplifyName(c.nazwaWys) || c.nazwaWys;
+      var isZam = isZamowieniaType(wypOsobaName);
+      var canQty = isZam || (c.kategoria !== 'E');
+
+      // Check if WhatsApp should be visible
+      var hasPhone = false;
+      if (wypOsobaId) {
+        for (var i = 0; i < allOsoby.length; i++) {
+          if (allOsoby[i].id === wypOsobaId && allOsoby[i].telefon && allOsoby[i].telefon.trim()) {
+            hasPhone = true;
+            break;
+          }
+        }
+      }
+
+      var h = '<div style="background:#eef2f7;padding:6px 10px;border-radius:10px;margin-top:4px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<span style="font-size:13px;"><b>' + esc(laName) + '</b>'
+        + (c.sn ? ' <span style="color:#8b5cf6;font-size:11px;">SN: ' + esc(c.sn) + '</span>' : '')
+        + ' ' + getKategoriaBadge(c.kategoria) + '</span>'
+        + '<span onclick="wypLastRemove()" style="color:#ef4444;cursor:pointer;font-size:12px;font-weight:bold;">Usuń</span>'
+        + '</div>';
+      if (canQty) {
+        var qtyDisplay = isZam
+          ? '<input type="number" value="' + c.qty + '" min="1" onchange="wypCartSetQty(' + idx + ',this.value);renderWypLastAdded()" style="width:55px;height:28px;font-size:14px;font-weight:bold;text-align:center;border:1px solid #d1d5db;border-radius:6px;padding:0 4px;">'
+          : '<span style="font-size:14px;font-weight:bold;min-width:20px;text-align:center;">' + c.qty + '</span>';
+        h += '<div style="display:flex;align-items:center;gap:4px;margin-top:4px;">'
+          + '<button class="qty-btn" onclick="wypLastQty(-1)" style="width:28px;height:28px;font-size:16px;">−</button>'
+          + qtyDisplay
+          + '<button class="qty-btn" onclick="wypLastQty(1)" style="width:28px;height:28px;font-size:16px;">+</button>'
+          + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(false)" style="flex:1;height:32px;font-size:12px;margin:0;margin-left:4px;">Wydaj</button>';
+        if (hasPhone) {
+          h += '<button class="btn" id="wypWhatsBtn2" onclick="wypSubmit(true)" style="flex:1;height:32px;font-size:12px;margin:0;background:#25d366;color:white;box-shadow:0 2px 0 #1da851;">WhatsApp</button>';
+        }
+        h += '</div>';
+      } else {
+        h += '<div style="display:flex;gap:4px;margin-top:4px;">'
+          + '<button class="btn btn-success" id="wypSubmitBtn2" onclick="wypSubmit(false)" style="flex:1;height:32px;font-size:12px;margin:0;">Wydaj</button>';
+        if (hasPhone) {
+          h += '<button class="btn" id="wypWhatsBtn2" onclick="wypSubmit(true)" style="flex:1;height:32px;font-size:12px;margin:0;background:#25d366;color:white;box-shadow:0 2px 0 #1da851;">WhatsApp</button>';
+        }
+        h += '</div>';
+      }
+      h += '</div>';
+
+      laEl.innerHTML = h;
+      laEl.style.display = 'block';
+    }
+
+    function wypLastQty(delta) {
+      if (!wypCartItems.length) return;
+      var idx = wypCartItems.length - 1;
+      if (delta > 0 && !isZamowieniaType(wypOsobaName) && wypCartItems[idx].qty >= wypCartItems[idx].max) return;
+      wypCartItems[idx].qty += delta;
+      if (wypCartItems[idx].qty <= 0) {
+        wypCartItems.splice(idx, 1);
+        renderWypLastAdded();
+      } else {
+        renderWypLastAdded();
+      }
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+    }
+
+    function wypLastRemove() {
+      if (!wypCartItems.length) return;
+      wypCartItems.splice(wypCartItems.length - 1, 1);
+      renderWypCart();
+      renderWypNarzList(getFilteredGrouped());
+      renderWypLastAdded();
+    }
+
+    function wypCartChangeQty(idx, delta) {
+      var item = wypCartItems[idx];
+      if (!item) return;
+      if (delta > 0 && !isZamowieniaType(wypOsobaName) && item.qty >= item.max) return;
+      item.qty += delta;
+      if (item.qty <= 0) {
+        wypCartItems.splice(idx, 1);
+      }
+      _saveListaCart();
+      renderWypCart();
+      renderWypLastAdded();
+      renderWypNarzList(getFilteredGrouped());
+    }
+
+    function wypCartSetQty(idx, val) {
+      var q = parseInt(val, 10);
+      if (!q || q < 1) q = 1;
+      wypCartItems[idx].qty = q;
+      _saveListaCart();
+      renderWypLastAdded();
+    }
+
+    function wypRemoveFromCart(idx) {
+      wypCartItems.splice(idx, 1);
+      _saveListaCart();
+      renderWypCart();
+      renderWypLastAdded();
+      renderWypNarzList(getFilteredGrouped());
+    }
+
+    function wypCartAddPhoto(idx, input) {
+      if (!input.files || !input.files[0]) return;
+      compressImage(input.files[0], 1024, 0.6, function (base64) {
+        wypCartItems[idx].photoBase64 = base64;
+        renderWypCart();
+      });
+    }
+
+    function wypCartRemovePhoto(idx) {
+      wypCartItems[idx].photoBase64 = null;
+      renderWypCart();
+    }
+
+    function renderWypCart() {
+      var container = document.getElementById('wypCart');
+      var btn = document.getElementById('wypSubmitBtn');
+      var whatsBtn = document.getElementById('wypWhatsBtn');
+      var bottomBar = document.getElementById('wypBottomBar');
+      var collapsedCount = document.getElementById('wypCollapsedCount');
+      if (collapsedCount) collapsedCount.textContent = wypCartItems.length;
+
+      if (!wypCartItems.length) {
+        container.innerHTML = '';
+        btn.disabled = true;
+        if (whatsBtn) whatsBtn.disabled = true;
+        bottomBar.style.display = 'none';
+        return;
+      }
+
+      btn.disabled = false;
+      if (whatsBtn && whatsBtn.style.display !== 'none') whatsBtn.disabled = false;
+      bottomBar.style.display = 'block';
+      var isZam = isZamowieniaType(wypOsobaName);
+      var h = '';
+      for (var i = 0; i < wypCartItems.length; i++) {
+        var c = wypCartItems[i];
+        var canChangeQty = isZam || (c.kategoria !== 'E');
+        var cartName = simplifyName(c.nazwaWys) || c.nazwaWys;
+        h += '<div class="cart-item" style="flex-wrap:wrap;padding:6px 8px;margin-bottom:2px;'
+          + (c.damaged ? 'background:#fef2f2;border-left:3px solid #ef4444;' : '') + '">'
+          + '<div style="flex:1;min-width:0;font-size:13px;">'
+          + '<b>' + esc(cartName) + '</b>'
+          + (c.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(c.sn) + '</span>' : '')
+          + ' ' + getKategoriaBadge(c.kategoria)
+          + (c.damaged ? ' <span style="font-size:10px;background:#ef4444;color:#fff;padding:1px 5px;border-radius:3px;">Uszkodzone</span>' : '')
+          + '</div>';
+
+        if (c.damaged) {
+          h += '<span class="qty-val" style="font-size:13px;color:#ef4444;">' + c.qty + ' szt.</span>'
+            + '<button onclick="wypRemoveFromCart(' + i + ')" style="background:none;border:none;color:#ef4444;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">&times;</button>';
+        } else if (canChangeQty) {
+          h += '<div style="display:flex;align-items:center;gap:4px;">';
+          if (isZam) {
+            h += '<input type="number" value="' + c.qty + '" min="1" onchange="wypCartSetQty(' + i + ',this.value)" '
+              + 'style="width:55px;height:28px;font-size:13px;font-weight:bold;text-align:center;border:1px solid #d1d5db;border-radius:6px;padding:0 4px;">';
+          } else {
+            h += '<span class="qty-val" style="font-size:13px;min-width:40px;text-align:center;">' + c.qty + ' z ' + c.max + '</span>';
+          }
+          h += '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',-1)" style="width:28px;height:28px;font-size:16px;">−</button>'
+            + '<button class="qty-btn" onclick="wypCartChangeQty(' + i + ',1)" style="width:28px;height:28px;font-size:16px;">+</button>'
+            + '<button onclick="wypRemoveFromCart(' + i + ')" style="background:none;border:none;color:#ef4444;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">&times;</button>'
+            + '</div>';
+        } else {
+          h += '<span class="qty-val" style="font-size:13px;">1</span>'
+            + '<button onclick="wypRemoveFromCart(' + i + ')" style="background:none;border:none;color:#ef4444;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">&times;</button>';
+        }
+
+        // Opcja zdjęcia (wymagane dla oflagowanych, pominięte dla uszkodzonych)
+        if (c.damaged) {
+          // brak opcji zdjęcia dla uszkodzonych
+        } else if (c.photoBase64) {
+          h += '<div style="width:100%;margin-top:4px;display:flex;align-items:center;gap:8px;">'
+            + '<span style="font-size:11px;color:#10b981;">Zdjęcie OK</span>'
+            + '<span onclick="wypCartRemovePhoto(' + i + ')" style="font-size:11px;color:#ef4444;cursor:pointer;">Usuń</span>'
+            + '</div>';
+        } else if (c.flaga) {
+          h += '<div style="width:100%;margin-top:4px;">'
+            + '<label style="font-size:11px;color:#ef4444;cursor:pointer;margin:0;font-weight:bold;">'
+            + '<input type="file" accept="image/*" capture="environment" onchange="wypCartAddPhoto(' + i + ',this)" style="display:none;">'
+            + '&#9873; Zdjęcie wymagane!'
+            + '</label></div>';
+        } else {
+          h += '<div style="width:100%;margin-top:4px;">'
+            + '<label style="font-size:11px;color:#667eea;cursor:pointer;margin:0;">'
+            + '<input type="file" accept="image/*" capture="environment" onchange="wypCartAddPhoto(' + i + ',this)" style="display:none;">'
+            + 'Dodaj zdjęcie'
+            + '</label></div>';
+        }
+
+        h += '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function wypSubmit(sendWhatsApp) {
+      if (!wypCartItems.length) {
+        toast("Dodaj narzędzia do koszyka", "error");
+        return;
+      }
+
+      // Validation
+      for (var i = 0; i < wypCartItems.length; i++) {
+        var item = wypCartItems[i];
+        if (item.damaged) continue; // uszkodzone nie wymagają walidacji
+        if (item.kategoria !== 'Z' && !wypOsobaId) {
+          toast("Osoba wymagana dla: " + item.nazwaWys + " (nie-zużywalne)", "error");
+          return;
+        }
+        if (item.kategoria === 'E' && !item.sn && !isZamowieniaType(wypOsobaName)) {
+          toast("SN wymagany dla: " + item.nazwaWys, "error");
+          return;
+        }
+        if (item.flaga && !item.photoBase64) {
+          toast("Zdjęcie wymagane dla oflagowanego: " + item.nazwaWys, "error");
+          return;
+        }
+      }
+
+      var items = wypCartItems.map(function (c) {
+        var o = {
+          nazwaWys: c.nazwaWys,
+          sn: c.sn || '',
+          qty: c.qty,
+          kategoria: c.kategoria,
+          photoBase64: c.photoBase64 || null
+        };
+        if (c.damaged) { o.damaged = true; o.opisUszkodzenia = c.opisUszkodzenia || ''; }
+        if (c.custom) o.custom = true;
+        return o;
+      });
+
+      var savedCart = wypCartItems.slice();
+
+      var btn1 = document.getElementById('wypSubmitBtn');
+      var btn2 = document.getElementById('wypSubmitBtn2');
+      if (btn1) { btn1.disabled = true; btn1.textContent = 'Wysyłam...'; }
+      if (btn2) { btn2.disabled = true; }
+      var whatsBtn = document.getElementById('wypWhatsBtn');
+      if (whatsBtn) whatsBtn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            var msg = "Wydanie zapisane!";
+            if (res.warnings && res.warnings.length) {
+              msg += ' Uwagi: ' + res.warnings.join(', ');
+            }
+            toast(msg, "success");
+            if (sendWhatsApp) {
+              sendWhatsAppWyp();
+            }
+            closeModal('modalWypozycz');
+            // Auto-raport dla list
+            if (isAnyListType(wypOsobaName)) {
+              setTimeout(function() {
+                currentDetailOsoba = allOsoby.find(function(o) { return o.imie === wypOsobaName; }) || { imie: wypOsobaName };
+                showRaportOsoby();
+              }, 500);
+            }
+            _clearListaCart();
+            wypCartItems = [];
+            loadLogBackground();
+            loadKatalogBackground();
+          } else {
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
+            var btn1 = document.getElementById('wypSubmitBtn');
+            var btn2 = document.getElementById('wypSubmitBtn2');
+            if (btn1) { btn1.disabled = false; btn1.textContent = 'Nowe wydanie'; }
+            if (btn2) { btn2.disabled = false; }
+            var whatsBtn = document.getElementById('wypWhatsBtn');
+            if (whatsBtn) whatsBtn.disabled = false;
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast("Błąd: " + err.message, "error");
+          var btn1 = document.getElementById('wypSubmitBtn');
+          var btn2 = document.getElementById('wypSubmitBtn2');
+          if (btn1) { btn1.disabled = false; btn1.textContent = 'Nowe wydanie'; }
+          if (btn2) { btn2.disabled = false; }
+          var whatsBtn = document.getElementById('wypWhatsBtn');
+          if (whatsBtn) whatsBtn.disabled = false;
+        })
+        .wydajBatch(wypOsobaId, items, currentOperator);
+    }
+
+    /* =========================
+       ZDJĘCIA — KOMPRESJA
+    ========================= */
+    function compressImage(file, maxWidth, quality, callback) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          var ratio = Math.min(maxWidth / img.width, 1);
+          canvas.width = img.width * ratio;
+          canvas.height = img.height * ratio;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', quality || 0.6);
+          var base64 = dataUrl.split(',')[1];
+          callback(base64);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function previewPhoto(inputEl, containerId) {
+      var container = document.getElementById(containerId);
+      if (!inputEl.files || !inputEl.files[0]) {
+        container.innerHTML = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        container.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:150px;border-radius:10px;margin-top:8px;">';
+      };
+      reader.readAsDataURL(inputEl.files[0]);
+    }
+</script>

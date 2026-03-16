@@ -121,7 +121,7 @@
         var detailName = resolveNazwa(e.nazwaSys);
         var isChecked = returnCartIds.indexOf(e.idOp) !== -1;
         var rqty = returnCartQty[e.idOp] || e.ilosc;
-        var isDmg = e.opisUszkodzenia && e.opisUszkodzenia.trim().length > 0;
+        var isDmg = e.status === 'Uszkodzone' || (e.opisUszkodzenia && e.opisUszkodzenia.trim().length > 0);
         var itemStyle = isDmg ? 'cursor:pointer;padding:8px 10px;margin-bottom:3px;border-radius:10px;border-left:3px solid #ef4444;background:#fef2f2;' : 'cursor:pointer;padding:8px 10px;margin-bottom:3px;border-radius:10px;';
         h += '<div class="cart-item" style="' + itemStyle + '" onclick="toggleReturnCart(\'' + esc(e.idOp) + '\',this)">'
           + '<input type="checkbox" class="wyp-item-check" style="width:20px;height:20px;" data-id="' + esc(e.idOp) + '"' + (isChecked ? ' checked' : '') + '>'
@@ -130,7 +130,8 @@
           + (e.sn ? ' <span style="font-size:11px;color:#8b5cf6;">SN: ' + esc(e.sn) + '</span>' : '')
           + ' <span style="font-size:11px;color:#636e72;">' + esc(e.dataWydania) + '</span> ' + getKategoriaBadge(e.kategoria);
         if (isDmg) {
-          h += '<div style="font-size:11px;color:#ef4444;margin-top:2px;font-weight:600;">⚠ Uszkodzenie: ' + esc(e.opisUszkodzenia) + '</div>';
+          var dmgText = e.opisUszkodzenia && e.opisUszkodzenia.trim() ? e.opisUszkodzenia : (e.status === 'Uszkodzone' ? 'Uszkodzone' : '');
+          h += '<div style="font-size:11px;color:#ef4444;margin-top:2px;font-weight:600;">\u26a0 ' + esc(dmgText) + '</div>';
         }
         if (isCommentList) {
           h += '<div onclick="event.stopPropagation();openRoboczaComment(\'' + esc(e.idOp) + '\',\'' + esc(detailName).replace(/'/g, "\\'") + '\')" style="font-size:11px;color:#0891b2;margin-top:2px;cursor:pointer;text-decoration:underline;">✏ Dodaj komentarz</div>';

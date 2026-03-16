@@ -89,7 +89,8 @@ function wydajBatch(idOsoby, items, operator) {
         przesSheet.appendRow([
           opId, new Date(), osobaImie,
           item.nazwaWys, item.sn || '',
-          qty, item.kategoria || 'N', 'Uszkodzone', photoUrl, '', '', '',
+          qty, item.kategoria || 'N', 'Uszkodzone', photoUrl, '', '',
+          item.opisUszkodzenia || '',
           operator || ''
         ]);
         continue;
