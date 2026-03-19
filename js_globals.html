@@ -719,6 +719,15 @@
       setTimeout(function () { el.classList.remove('show'); }, duration);
     }
 
+    function _debounce(fn, delay) {
+      var timer = null;
+      return function() {
+        var args = arguments, ctx = this;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function() { fn.apply(ctx, args); }, delay);
+      };
+    }
+
     function toggleClearBtn(inputId) {
       var input = document.getElementById(inputId);
       var btn = document.getElementById(inputId + '-clear');

@@ -1,0 +1,408 @@
+<script>
+    /* =========================
+       KATALOG (NARZĘDZIA)
+    ========================= */
+    function loadKatalog() {
+      showLoading();
+      google.script.run.withSuccessHandler(function (d) {
+        allKatalog = (d && d.katalog) || [];
+        allKatalogGrouped = (d && d.katalogGrouped) || [];
+        resetSysToWysMap();
+        applyNarzFilters();
+        hideLoading();
+      }).withFailureHandler(function () {
+        hideLoading();
+        toast("Błąd ładowania katalogu", "error");
+      }).getInitialData();
+    }
+
+    function loadKatalogBackground() {
+      google.script.run.withSuccessHandler(function (d) {
+        allKatalog = (d && d.katalog) || [];
+        allKatalogGrouped = (d && d.katalogGrouped) || [];
+        resetSysToWysMap();
+        applyNarzFilters();
+      }).getInitialData();
+    }
+
+    function renderNarzedzia(data) {
+      var container = document.getElementById('narzedziaList');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak narzędzi w katalogu</div>';
+        return;
+      }
+      var h = '';
+      for (var i = 0; i < data.length; i++) {
+        var g = data[i]; // grouped item
+        var katBadge = getKategoriaBadge(g.kategoria);
+        var cleanName = simplifyName(g.nazwaWys) || simplifyName(g.nazwaSys) || g.nazwaWys;
+        var firstItem = g.items && g.items[0] ? g.items[0] : g;
+        var titleText = esc(cleanName);
+        if (g.kategoria === 'E' && firstItem.sn) {
+          titleText += ' <span style="color:#8b5cf6;font-weight:normal;font-size:13px;">SN: ' + esc(firstItem.sn) + '</span>';
+        }
+        var itemCount = g.items ? g.items.length : 1;
+
+        // Status
+        var sCls, sTxt;
+        if (g.kategoria === 'Z') {
+          var consumed = 0;
+          if (g.items) { for (var ci = 0; ci < g.items.length; ci++) consumed += getConsumedCount(g.items[ci].nazwaSys); }
+          sCls = g.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
+          sTxt = 'Stan: ' + g.aktualnieNaStanie + ' | Zużyto: ' + consumed;
+        } else {
+          sCls = g.aktualnieNaStanie > 0 ? 'status-available' : 'status-borrowed';
+          sTxt = g.aktualnieNaStanie > 0 ? 'Dostępne: ' + g.aktualnieNaStanie : 'Brak';
+        }
+
+        // Flaga — toggle dla wszystkich itemów grupy
+        var flagIds = [];
+        if (g.items) { for (var fi = 0; fi < g.items.length; fi++) flagIds.push(g.items[fi].id); }
+        var flagActive = g.flaga;
+        var flagStyle = flagActive
+          ? 'color:#ef4444;cursor:pointer;font-size:18px;'
+          : 'color:#cbd5e1;cursor:pointer;font-size:18px;';
+
+        h += '<div class="narz-card">'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;align-items:center;gap:8px;">'
+          + '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap;">'
+          + '<b onclick="openItemDetail(\'' + esc(firstItem.nazwaSys) + '\')" style="font-size:16px;cursor:pointer;color:#2d3436;">' + titleText + '</b>'
+          + katBadge
+          + (itemCount > 1 ? ' <span style="font-size:12px;color:#636e72;">(' + itemCount + ' szt.)</span>' : '')
+          + '</div>';
+
+        // W trybie inwentaryzacji: input zamiast badge
+        if (inwentaryzujMode) {
+          if (g.kategoria === 'E' && g.items && g.items.length > 1) {
+            h += '<span class="status-badge ' + sCls + '" style="white-space:nowrap;">' + sTxt + '</span>';
+          } else {
+            var invNazwaSys = firstItem.nazwaSys || '';
+            h += '<input type="number" class="inv-qty-input" data-nazwa-sys="' + esc(invNazwaSys) + '" data-orig="' + g.aktualnieNaStanie + '" value="' + g.aktualnieNaStanie + '" min="0" style="width:70px;height:36px;text-align:center;font-size:16px;font-weight:bold;border:2px solid #7c3aed;border-radius:8px;margin-left:8px;">';
+          }
+        } else {
+          h += '<span class="status-badge ' + sCls + '" style="white-space:nowrap;">' + sTxt + '</span>';
+        }
+        h += '</div>';
+
+        if (g.kategoria === 'Z') {
+          if (!inwentaryzujMode) {
+            var consumed = g.stanPoczatkowy - g.aktualnieNaStanie;
+            h += '<div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+              + '<span style="font-size:12px;color:#636e72;">' + g.aktualnieNaStanie + '/' + g.stanPoczatkowy + '</span>'
+              + (g.aktualnieNaStanie > 0 ? '<button onclick="event.stopPropagation();szybkieWydaj(\'' + esc(g.nazwaWys) + '\',\'' + esc(g.kategoria) + '\')" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">Wydaj</button>' : '<span style="color:#ef4444;font-size:12px;">Brak na stanie</span>')
+              + (consumed > 0 ? '<button onclick="event.stopPropagation();uzupelnijStan(\'' + esc(g.nazwaWys) + '\')" style="background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">Uzupełnij</button>' : '')
+              + '</div>';
+          }
+        } else {
+          // Lista SN dla E z wieloma egzemplarzami
+          if (g.kategoria === 'E' && g.items && g.items.length > 0) {
+            h += '<div style="font-size:12px;color:#b2bec3;margin-bottom:2px;">';
+            for (var si = 0; si < g.items.length; si++) {
+              var it = g.items[si];
+              var snLabel = it.sn ? 'SN: ' + esc(it.sn) : esc(simplifyName(it.nazwaSys) || it.nazwaSys);
+              if (inwentaryzujMode) {
+                h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;">'
+                  + '<span style="color:#8b5cf6;">' + snLabel + '</span>'
+                  + '<input type="number" class="inv-qty-input" data-nazwa-sys="' + esc(it.nazwaSys) + '" data-orig="' + it.aktualnieNaStanie + '" value="' + it.aktualnieNaStanie + '" min="0" style="width:60px;height:30px;text-align:center;font-size:14px;font-weight:bold;border:2px solid #7c3aed;border-radius:6px;">'
+                  + '</div>';
+              } else {
+                var stColor = it.aktualnieNaStanie > 0 ? '#10b981' : '#ef4444';
+                h += '<div onclick="openItemDetail(\'' + esc(it.nazwaSys) + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;cursor:pointer;">'
+                  + '<span style="color:#8b5cf6;">' + snLabel + '</span>'
+                  + '<span style="color:' + stColor + ';font-size:11px;">' + (it.aktualnieNaStanie > 0 ? 'Dostępne' : 'Wydane') + '</span>'
+                  + '</div>';
+              }
+            }
+            h += '</div>';
+          }
+
+          if (!inwentaryzujMode) {
+            h += '<div style="margin-top:4px;display:flex;gap:15px;align-items:center;">';
+            var firstItem = g.items && g.items[0] ? g.items[0] : g;
+            h += '<span onclick="openDamageModal(\'' + esc(firstItem.nazwaSys) + '\',\'' + esc(firstItem.sn || '') + '\')" style="color:#ef4444;cursor:pointer;font-size:12px;">Zgłoś uszkodzenie</span>';
+            if (g.kategoria === 'N') {
+              h += '<span onclick="przesunDoZuzywalnych(\'' + esc(firstItem.id) + '\',\'' + esc(g.nazwaWys) + '\')" style="color:#f59e0b;cursor:pointer;font-size:12px;">Przesuń do zużywalnych</span>';
+            }
+            h += '<span onclick="event.stopPropagation();toggleFlaga(' + JSON.stringify(flagIds).replace(/"/g, '&quot;') + ')" style="' + flagStyle + '" title="' + (flagActive ? 'Oflagowane' : 'Oflaguj') + '">&#9873;</span>';
+            h += '</div>';
+          }
+        }
+
+        // Tagi row (hide in inventory mode)
+        if (!inwentaryzujMode) {
+          var firstTagi = firstItem.tagi || '';
+          h += '<div style="margin-top:4px;font-size:11px;color:#94a3b8;cursor:pointer;" onclick="event.stopPropagation();editTagi(\'' + esc(firstItem.id) + '\')">';
+          if (firstTagi) {
+            h += firstTagi.split(',').map(function(t){ return '<span style="background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:8px;margin-right:3px;">' + esc(t.trim()) + '</span>'; }).join('');
+          } else {
+            h += '<span style="color:#cbd5e1;">+ tagi</span>';
+          }
+          h += '</div>';
+        }
+
+        // Ostatnio Widziane
+        var owDate = g.ostatnioWidziane || '';
+        if (owDate) {
+          h += '<div style="margin-top:3px;font-size:10px;color:#a0aec0;">Widziane: ' + esc(owDate) + '</div>';
+        }
+
+        h += '</div>';
+      }
+      container.innerHTML = h;
+    }
+
+    function openAddKatalogModal() {
+      document.getElementById('newKatKategoria').value = '';
+      document.getElementById('newKatNazwaSys').value = '';
+      document.getElementById('newKatNazwaWys').value = '';
+      document.getElementById('newKatSN').value = '';
+      document.getElementById('newKatStan').value = '1';
+      document.getElementById('newKatSNSection').style.display = 'none';
+      document.getElementById('newKatStan').removeAttribute('readonly');
+      lastAdded = null;
+      document.getElementById('lastAddedItem').style.display = 'none';
+      openModal('modalAddKatalog');
+    }
+
+    function onKatKategoriaChange() {
+      var kat = document.getElementById('newKatKategoria').value;
+      var snSection = document.getElementById('newKatSNSection');
+      var stanInput = document.getElementById('newKatStan');
+
+      snSection.style.display = (kat === 'E') ? 'block' : 'none';
+
+      if (kat === 'E') {
+        stanInput.value = '1';
+        stanInput.setAttribute('readonly', true);
+      } else {
+        stanInput.removeAttribute('readonly');
+      }
+    }
+
+    var lastAdded = null;
+
+    function addKatalogItem() {
+      var nazwaSys = document.getElementById('newKatNazwaSys').value.trim();
+      var nazwaWys = document.getElementById('newKatNazwaWys').value.trim();
+      var kategoria = document.getElementById('newKatKategoria').value;
+      var sn = document.getElementById('newKatSN').value.trim();
+      var stan = parseInt(document.getElementById('newKatStan').value) || 1;
+
+      if (!nazwaSys) { toast("Podaj nazwę systemową", "error"); return; }
+      if (!nazwaWys) { toast("Podaj nazwę wyświetlaną", "error"); return; }
+      if (!kategoria) { toast("Wybierz kategorię", "error"); return; }
+      if (kategoria === 'E' && !sn) {
+        toast("SN wymagany dla tej kategorii", "error"); return;
+      }
+
+      toast("Dodaję...", "info");
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            toast("Dodano: " + nazwaWys, "success");
+            lastAdded = { nazwaWys: nazwaWys, kategoria: kategoria, stan: stan };
+            renderLastAdded();
+            // Wyczyść formularz do kolejnego wpisu
+            document.getElementById('newKatNazwaSys').value = '';
+            document.getElementById('newKatNazwaWys').value = '';
+            document.getElementById('newKatSN').value = '';
+            document.getElementById('newKatStan').value = '1';
+            loadKatalogBackground();
+          } else {
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast("Błąd: " + err.message, "error");
+        })
+        .addKatalogItem(nazwaSys, nazwaWys, kategoria, sn, stan);
+    }
+
+    function renderLastAdded() {
+      var el = document.getElementById('lastAddedItem');
+      if (!lastAdded) { el.style.display = 'none'; return; }
+      var la = lastAdded;
+      var h = '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<div><b>' + esc(la.nazwaWys) + '</b> ' + getKategoriaBadge(la.kategoria)
+        + '<br><span style="font-size:12px;color:#636e72;">Stan: ' + la.stan + '</span></div>';
+
+      if (la.kategoria === 'N' || la.kategoria === 'Z') {
+        h += '<div style="display:flex;align-items:center;gap:6px;">'
+          + '<input type="number" id="lastAddedQty" value="1" min="1" style="width:60px;height:40px;text-align:center;border:1px solid #ddd;border-radius:8px;font-size:16px;">'
+          + '<button onclick="zwiekszOstatnia()" style="background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:bold;cursor:pointer;">+ Dodaj ilość</button>'
+          + '</div>';
+      }
+
+      h += '</div>';
+      el.innerHTML = h;
+      el.style.display = 'block';
+    }
+
+    function zwiekszOstatnia() {
+      if (!lastAdded) return;
+      var qty = parseInt(document.getElementById('lastAddedQty').value) || 1;
+      if (qty < 1) return;
+
+      lastAdded.stan += qty;
+      renderLastAdded();
+      toast('Dodano +' + qty + ' do ' + lastAdded.nazwaWys, 'success');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.success) {
+            toast('Błąd zapisu: ' + (res.error || ''), 'error');
+          }
+          loadKatalogBackground();
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .zwiekszStan(lastAdded.nazwaWys, qty);
+    }
+
+    /* =========================
+       WYSZUKIWANIE
+    ========================= */
+    document.getElementById("searchLog").addEventListener("input", _debounce(function () {
+      applyLogFilters();
+    }, 150));
+
+    document.getElementById("searchOsoby").addEventListener("input", _debounce(function (e) {
+      var q = document.getElementById("searchOsoby").value;
+      if (!q) { renderOsoby(allOsoby); return; }
+      renderOsoby(scoredSearch(allOsoby, ['imie', 'telefon', 'lokalizacja', 'email'], q));
+    }, 150));
+
+    document.getElementById("searchNarzedzia").addEventListener("input", _debounce(function () {
+      applyNarzFilters();
+    }, 150));
+
+    function filterNarzKategoria(kat, btn) {
+      currentNarzKategoria = kat;
+      document.getElementById('narzKatFilters').querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyNarzFilters();
+    }
+
+    function groupKatalog(items) {
+      var groups = {};
+      for (var i = 0; i < items.length; i++) {
+        var n = items[i];
+        // E (ewidencjonowane) — każdy egzemplarz osobno, reszta — grupuj po uproszczonej nazwie
+        var key = n.kategoria === 'E'
+          ? 'E_' + n.id
+          : (simplifyName(n.nazwaWys) || simplifyName(n.nazwaSys) || n.nazwaWys).toLowerCase();
+        if (!groups[key]) {
+          groups[key] = {
+            nazwaWys: n.nazwaWys,
+            nazwaSys: n.nazwaSys,
+            kategoria: n.kategoria,
+            flaga: false,
+            aktualnieNaStanie: 0,
+            stanPoczatkowy: 0,
+            ostatnioWidziane: '',
+            items: []
+          };
+        }
+        if (n.flaga) groups[key].flaga = true;
+        groups[key].aktualnieNaStanie += n.aktualnieNaStanie;
+        groups[key].stanPoczatkowy += n.stanPoczatkowy;
+        if (n.ostatnioWidziane && (!groups[key].ostatnioWidziane || n.ostatnioWidziane > groups[key].ostatnioWidziane)) {
+          groups[key].ostatnioWidziane = n.ostatnioWidziane;
+        }
+        groups[key].items.push(n);
+      }
+      var result = [];
+      for (var k in groups) { result.push(groups[k]); }
+      return result.sort(function (a, b) { return a.nazwaWys.localeCompare(b.nazwaWys); });
+    }
+
+    function applyNarzFilters() {
+      var q = document.getElementById('searchNarzedzia').value;
+      var filtered = allKatalog;
+
+      if (currentNarzKategoria !== 'all') {
+        filtered = filtered.filter(function (n) { return n.kategoria === currentNarzKategoria; });
+      }
+
+      if (q) {
+        filtered = scoredSearch(filtered, ['nazwaSys', 'nazwaWys', 'kategoria', 'sn', 'tagi'], q);
+      }
+      renderNarzedzia(groupKatalog(filtered));
+      renderOsobySearchResults(q);
+    }
+
+    function renderOsobySearchResults(q) {
+      var box = document.getElementById('osobySearchResults');
+      if (!box) return;
+      if (!q || !q.trim()) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      var found = scoredSearch(allOsoby, ['imie', 'telefon', 'lokalizacja', 'email'], q);
+      if (!found.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      var counts = getActiveCountByPerson();
+      var h = '<div style="font-size:11px;font-weight:bold;color:#636e72;text-transform:uppercase;margin-bottom:6px;">Osoby</div>';
+      for (var i = 0; i < found.length; i++) {
+        var o = found[i];
+        var cnt = counts[o.imie] || 0;
+        var displayName = stripListPrefix(o.imie);
+        h += '<div onclick="openOsobaDetail(\'' + esc(o.id) + '\');switchTab(\'tabOsoby\')" style="background:#f0f4ff;border-radius:10px;padding:8px 12px;margin-bottom:4px;cursor:pointer;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+          + '<span style="font-weight:bold;font-size:14px;">'
+          + getListBadge(o.imie)
+          + esc(displayName) + '</span>'
+          + (cnt > 0 ? '<span style="font-size:11px;color:#667eea;">' + cnt + ' wyp.</span>' : '')
+          + '</div>'
+          + '<div style="font-size:12px;color:#636e72;display:flex;gap:10px;margin-top:2px;">'
+          + (o.lokalizacja ? '<span>' + esc(o.lokalizacja) + '</span>' : '')
+          + (o.telefon ? '<span>' + esc(o.telefon) + '</span>' : '')
+          + '</div></div>';
+      }
+      box.innerHTML = h;
+      box.style.display = 'block';
+    }
+
+    /* =========================
+       TRYB INWENTARYZACJI
+    ========================= */
+    var inwentaryzujMode = false;
+
+    function toggleInwentaryzujMode() {
+      inwentaryzujMode = !inwentaryzujMode;
+      var btn = document.getElementById('btnInwentaryzuj');
+      btn.textContent = inwentaryzujMode ? 'Anuluj' : 'Inwentaryzuj';
+      btn.style.background = inwentaryzujMode ? '#ef4444' : '#7c3aed';
+      document.getElementById('inwentaryzujBar').style.display = inwentaryzujMode ? 'block' : 'none';
+      applyNarzFilters();
+    }
+
+    function zapiszInwentaryzacje() {
+      var inputs = document.querySelectorAll('.inv-qty-input');
+      var updates = [];
+      for (var i = 0; i < inputs.length; i++) {
+        var inp = inputs[i];
+        var nazwaSys = inp.getAttribute('data-nazwa-sys');
+        var orig = Number(inp.getAttribute('data-orig'));
+        var newVal = Number(inp.value);
+        if (newVal !== orig) {
+          updates.push({ nazwaSys: nazwaSys, nowyStanIlosciowy: newVal, operator: currentOperator });
+        }
+      }
+      showLoading();
+      google.script.run.withSuccessHandler(function (r) {
+        hideLoading();
+        if (r && r.success) {
+          toast('Inwentaryzacja zapisana! Zmieniono: ' + r.updated + ', bez zmian: ' + r.unchanged, 'success');
+          inwentaryzujMode = false;
+          var btn = document.getElementById('btnInwentaryzuj');
+          btn.textContent = 'Inwentaryzuj';
+          btn.style.background = '#7c3aed';
+          document.getElementById('inwentaryzujBar').style.display = 'none';
+          loadKatalogBackground();
+        } else {
+          toast('Blad: ' + (r && r.error || 'nieznany'), 'error');
+        }
+      }).withFailureHandler(function (e) {
+        hideLoading();
+        toast('Blad: ' + e.message, 'error');
+      }).inwentaryzujBatch(updates);
+    }
+</script>

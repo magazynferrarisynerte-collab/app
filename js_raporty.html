@@ -282,22 +282,33 @@
         .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z');
     }
 
-    var SYNONYMS = {
-      'mlotek': ['mlot', 'mloteczek', 'mlotek'],
-      'mlot': ['mlotek', 'mloteczek', 'mlot'],
-      'klucz nasadowy': ['nasadki', 'klucz nasadowy'],
-      'nasadki': ['klucz nasadowy', 'nasadki'],
-      'wiertarka': ['wiertarko-wkretarka', 'wiertarka'],
-      'szlifierka': ['szlifierka katowa', 'flex', 'szlifierka'],
-      'flex': ['szlifierka katowa', 'szlifierka', 'flex'],
-      'kombinerki': ['kombinerki', 'szczypce'],
-      'szczypce': ['kombinerki', 'szczypce'],
-      'srubokrety': ['wkretak', 'srubokrety', 'srubokret'],
-      'wkretak': ['srubokrety', 'srubokret', 'wkretak'],
-      'srubokret': ['srubokrety', 'wkretak', 'srubokret'],
-      'poziomica': ['poziomica', 'libella'],
-      'libella': ['poziomica', 'libella']
-    };
+    var _SYN_GROUPS = [
+      ['mlotek', 'mlot', 'mloteczek', 'mlotki'],
+      ['klucz nasadowy', 'nasadki', 'nasadka'],
+      ['wiertarka', 'wiertarko-wkretarka', 'wkretarka', 'wiertarki'],
+      ['szlifierka', 'szlifierka katowa', 'flex', 'grinder'],
+      ['kombinerki', 'szczypce', 'obcegi', 'obcazki'],
+      ['srubokrety', 'wkretak', 'srubokret', 'wkretaki'],
+      ['poziomica', 'libella', 'poziomnica'],
+      ['klucz', 'klucze', 'klucz plaski', 'klucz oczkowy'],
+      ['pilarka', 'pila', 'pilarki', 'pily'],
+      ['tasma', 'miara', 'tasma miernicza', 'metr', 'miarka', 'przymiar'],
+      ['noz', 'noze', 'nozyk', 'cutter'],
+      ['latarka', 'lampa', 'lampka', 'oswietlenie'],
+      ['przedluzacz', 'przedluzacz bebnowy', 'kabel', 'rozgaleznik'],
+      ['drabina', 'drabinka', 'rusztowanie'],
+      ['rura', 'rurka', 'rury'],
+      ['stozek', 'pachołek', 'stolek', 'pacholek']
+    ];
+    var SYNONYMS = {};
+    (function() {
+      for (var g = 0; g < _SYN_GROUPS.length; g++) {
+        var group = _SYN_GROUPS[g];
+        for (var i = 0; i < group.length; i++) {
+          SYNONYMS[group[i]] = group.slice();
+        }
+      }
+    })();
 
     function expandWithSynonyms(word) {
       var syns = SYNONYMS[word];
@@ -333,16 +344,28 @@
       if (t === w) return 1.0;
       if (t.indexOf(w) === 0) return 0.9;
       if (t.indexOf(w) !== -1) return 0.85;
-      var maxLev = w.length <= 3 ? 0 : w.length <= 5 ? 1 : 2;
+      // Prefix match: word starts with query (short queries typed fast)
+      if (w.length >= 2) {
+        var tWords = t.split(/\s+/);
+        for (var pi = 0; pi < tWords.length; pi++) {
+          if (tWords[pi].indexOf(w) === 0) return 0.88;
+        }
+      }
+      var maxLev = w.length <= 2 ? 0 : w.length <= 4 ? 1 : 2;
       if (maxLev === 0) return 0;
-      var tWords = t.split(/\s+/);
+      var tWords2 = t.split(/\s+/);
       var bestLev = Infinity;
-      for (var i = 0; i < tWords.length; i++) {
-        var d = levenshtein(tWords[i], w);
+      for (var i = 0; i < tWords2.length; i++) {
+        var d = levenshtein(tWords2[i], w);
         if (d < bestLev) bestLev = d;
+        // Prefix-Levenshtein: compare word prefix of same length as query
+        if (tWords2[i].length > w.length) {
+          var d2 = levenshtein(tWords2[i].substring(0, w.length + 1), w);
+          if (d2 < bestLev) bestLev = d2;
+        }
       }
       if (bestLev <= maxLev) {
-        return 0.6 + (maxLev - bestLev) * 0.075;
+        return 0.6 + (maxLev - bestLev) * 0.1;
       }
       return 0;
     }
