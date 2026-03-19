@@ -653,14 +653,18 @@
         return o;
       });
 
-      var savedCart = wypCartItems.slice();
+      var savedOsobaName = wypOsobaName;
+      var savedSendWhatsApp = sendWhatsApp;
 
-      var btn1 = document.getElementById('wypSubmitBtn');
-      var btn2 = document.getElementById('wypSubmitBtn2');
-      if (btn1) { btn1.disabled = true; btn1.textContent = 'Wysyłam...'; }
-      if (btn2) { btn2.disabled = true; }
-      var whatsBtn = document.getElementById('wypWhatsBtn');
-      if (whatsBtn) whatsBtn.disabled = true;
+      // Optymistyczny update: zamknij modal od razu
+      toast("Wysyłam wydanie...", "info");
+      closeModal('modalWypozycz');
+      _clearListaCart();
+      wypCartItems = [];
+
+      if (savedSendWhatsApp) {
+        sendWhatsAppWyp();
+      }
 
       google.script.run
         .withSuccessHandler(function (res) {
@@ -670,39 +674,23 @@
               msg += ' Uwagi: ' + res.warnings.join(', ');
             }
             toast(msg, "success");
-            if (sendWhatsApp) {
-              sendWhatsAppWyp();
-            }
-            closeModal('modalWypozycz');
             // Auto-raport dla list
-            if (isAnyListType(wypOsobaName)) {
+            if (isAnyListType(savedOsobaName)) {
               setTimeout(function() {
-                currentDetailOsoba = allOsoby.find(function(o) { return o.imie === wypOsobaName; }) || { imie: wypOsobaName };
+                currentDetailOsoba = allOsoby.find(function(o) { return o.imie === savedOsobaName; }) || { imie: savedOsobaName };
                 showRaportOsoby();
               }, 500);
             }
-            _clearListaCart();
-            wypCartItems = [];
-            loadLogBackground();
-            loadKatalogBackground();
           } else {
-            toast("Błąd: " + (res.error || 'Nieznany'), "error");
-            var btn1 = document.getElementById('wypSubmitBtn');
-            var btn2 = document.getElementById('wypSubmitBtn2');
-            if (btn1) { btn1.disabled = false; btn1.textContent = 'Nowe wydanie'; }
-            if (btn2) { btn2.disabled = false; }
-            var whatsBtn = document.getElementById('wypWhatsBtn');
-            if (whatsBtn) whatsBtn.disabled = false;
+            toast("Błąd wydania: " + (res.error || 'Nieznany'), "error", 8000);
           }
+          loadLogBackground();
+          loadKatalogBackground();
         })
         .withFailureHandler(function (err) {
-          toast("Błąd: " + err.message, "error");
-          var btn1 = document.getElementById('wypSubmitBtn');
-          var btn2 = document.getElementById('wypSubmitBtn2');
-          if (btn1) { btn1.disabled = false; btn1.textContent = 'Nowe wydanie'; }
-          if (btn2) { btn2.disabled = false; }
-          var whatsBtn = document.getElementById('wypWhatsBtn');
-          if (whatsBtn) whatsBtn.disabled = false;
+          toast("Błąd wydania: " + err.message, "error", 8000);
+          loadLogBackground();
+          loadKatalogBackground();
         })
         .wydajBatch(wypOsobaId, items, currentOperator);
     }

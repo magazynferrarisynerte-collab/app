@@ -476,7 +476,7 @@
         if (returnCartQty[id]) qtyMap[id] = returnCartQty[id];
       }
 
-      // Optymistyczny update
+      // Optymistyczny update lokalny
       for (var ri = 0; ri < ids.length; ri++) {
         for (var rj = 0; rj < allLogEntries.length; rj++) {
           if (allLogEntries[rj].idOp === ids[ri]) {
@@ -493,26 +493,25 @@
       }
       applyLogFilters();
 
+      // Zamknij modal od razu — backend pracuje w tle
+      toast('Zwracam ' + ids.length + ' pozycji...', 'info');
+      closeModal('modalOsobaDetail');
+      switchTab('osoby', document.querySelector('.nav-btn[data-tab="osoby"]'));
+
       google.script.run
         .withSuccessHandler(function (res) {
           if (res && res.success) {
             toast('Zwrócono ' + res.count + ' pozycji!', 'success');
-            closeModal('modalOsobaDetail');
-            switchTab('osoby', document.querySelector('.nav-btn[data-tab="osoby"]'));
-            loadLogBackground();
-            loadKatalogBackground();
           } else {
-            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
-            document.getElementById('returnCartBtn').disabled = false;
-            document.getElementById('returnCartBtn').textContent = 'Zwróć';
-            loadLogBackground();
+            toast('Błąd zwrotu: ' + (res.error || 'Nieznany'), 'error', 8000);
           }
+          loadLogBackground();
+          loadKatalogBackground();
         })
         .withFailureHandler(function (err) {
-          toast('Błąd: ' + err.message, 'error');
-          document.getElementById('returnCartBtn').disabled = false;
-          document.getElementById('returnCartBtn').textContent = 'Zwróć';
+          toast('Błąd zwrotu: ' + err.message, 'error', 8000);
           loadLogBackground();
+          loadKatalogBackground();
         })
         .zwrocBatch(ids, photoMap, qtyMap, currentOperator);
     }
