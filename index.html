@@ -49,10 +49,13 @@
 
   <!-- TAB: LOG -->
   <div class="tab-content active" id="tabLog">
-    <div class="search-wrapper">
-      <input type="text" id="searchLog" class="search-input" placeholder="Szukaj w logach (osoba, narzędzie, SN)"
-        oninput="toggleClearBtn('searchLog')">
-      <button class="search-clear" id="searchLog-clear" onclick="clearSearch('searchLog')">&times;</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div class="search-wrapper" style="flex:1;margin-bottom:0;">
+        <input type="text" id="searchLog" class="search-input" placeholder="Szukaj w logach (osoba, narzędzie, SN)"
+          oninput="toggleClearBtn('searchLog')">
+        <button class="search-clear" id="searchLog-clear" onclick="clearSearch('searchLog')">&times;</button>
+      </div>
+      <button onclick="openWypozyczModal()" style="width:44px;height:44px;border-radius:12px;border:none;background:#667eea;color:#fff;font-size:24px;font-weight:bold;cursor:pointer;flex-shrink:0;line-height:1;">+</button>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
       <button class="filter-btn" onclick="filterLogStatus('all',this)">Wszystkie</button>
