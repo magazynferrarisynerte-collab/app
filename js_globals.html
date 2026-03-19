@@ -10,6 +10,121 @@
     var lastWypNarzFiltered = [];
 
     var currentOperator = localStorage.getItem('magazyn_operator') || '';
+    var _APP_URL = '';
+
+    /* =========================
+       RELIABLE OPERATION QUEUE
+    ========================= */
+    var _OQ_DB = 'MagOpQueue';
+    var _OQ_STORE = 'ops';
+
+    function _oqOpen(cb) {
+      var req = indexedDB.open(_OQ_DB, 1);
+      req.onupgradeneeded = function(e) { e.target.result.createObjectStore(_OQ_STORE, { keyPath: 'id' }); };
+      req.onsuccess = function(e) { cb(e.target.result); };
+      req.onerror = function() { cb(null); };
+    }
+    function _oqSave(id, data, cb) {
+      _oqOpen(function(db) {
+        if (!db) { if (cb) cb(); return; }
+        var tx = db.transaction(_OQ_STORE, 'readwrite');
+        tx.objectStore(_OQ_STORE).put({ id: id, data: data, ts: Date.now() });
+        tx.oncomplete = function() { if (cb) cb(); };
+      });
+    }
+    function _oqRemove(id) {
+      _oqOpen(function(db) {
+        if (!db) return;
+        db.transaction(_OQ_STORE, 'readwrite').objectStore(_OQ_STORE).delete(id);
+      });
+    }
+    function _oqGetAll(cb) {
+      _oqOpen(function(db) {
+        if (!db) { cb([]); return; }
+        var req = db.transaction(_OQ_STORE, 'readonly').objectStore(_OQ_STORE).getAll();
+        req.onsuccess = function() { cb(req.result || []); };
+        req.onerror = function() { cb([]); };
+      });
+    }
+
+    function _genBatchId() {
+      return 'b_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    }
+
+    // Fire-and-forget: fetch z keepalive (przeżywa zamknięcie strony)
+    function _fetchKeepalive(payload) {
+      if (!_APP_URL) return;
+      try {
+        var body = JSON.stringify(payload);
+        fetch(_APP_URL, {
+          method: 'POST',
+          body: body,
+          keepalive: body.length < 60000,
+          mode: 'no-cors'
+        });
+      } catch(e) { /* ignore */ }
+    }
+
+    // Retry pending operations from queue (called on page load)
+    function _oqRetryPending() {
+      _oqGetAll(function(ops) {
+        if (!ops.length) return;
+        for (var i = 0; i < ops.length; i++) {
+          var op = ops[i];
+          if (Date.now() - op.ts > 86400000) { _oqRemove(op.id); continue; } // >24h = discard
+          (function(opItem) {
+            var d = opItem.data;
+            if (d.action === 'wydajBatch') {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  _oqRemove(opItem.id);
+                  if (res && res.success && !res.deduplicated) {
+                    toast('Zaległa operacja wydania wykonana', 'success');
+                  }
+                  loadLogBackground(); loadKatalogBackground();
+                })
+                .withFailureHandler(function() { /* keep in queue */ })
+                .wydajBatch(d.idOsoby, d.items, d.operator, d.batchId);
+            } else if (d.action === 'zwrocBatch') {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  _oqRemove(opItem.id);
+                  if (res && res.success && !res.deduplicated) {
+                    toast('Zaległy zwrot wykonany', 'success');
+                  }
+                  loadLogBackground(); loadKatalogBackground();
+                })
+                .withFailureHandler(function() { /* keep in queue */ })
+                .zwrocBatch(d.ids, d.photoDataMap, d.qtyMap, d.operator, d.batchId);
+            } else if (d.action === 'przeniesNaOsobe') {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  _oqRemove(opItem.id);
+                  if (res && res.success && !res.deduplicated) {
+                    toast('Zaległe przekazanie wykonane', 'success');
+                  }
+                  loadLogBackground();
+                })
+                .withFailureHandler(function() { /* keep in queue */ })
+                .przeniesNaOsobe(d.ids, d.nowaOsoba, d.operator, d.batchId);
+            } else if (d.action === 'przeniesUszkodzone') {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  _oqRemove(opItem.id);
+                  if (res && res.success && !res.deduplicated) {
+                    toast('Zaległe przeniesienie uszkodzonego wykonane', 'success');
+                  }
+                  loadLogBackground();
+                })
+                .withFailureHandler(function() { /* keep in queue */ })
+                .przeniesUszkodzone(d.idOp, d.nowaOsoba, d.operator, d.batchId);
+            } else {
+              _oqRemove(opItem.id);
+            }
+          })(op);
+        }
+      });
+    }
 
     var wypOsobaId = null;
     var wypOsobaName = '';
@@ -345,23 +460,43 @@
 
     function executeTransfer(nowaOsoba) {
       var ids = returnCartIds.slice();
+      var savedOperator = currentOperator;
+      var batchId = _genBatchId();
+
+      // Optymistyczny update lokalny
       for (var i = 0; i < allLogEntries.length; i++) {
         if (ids.indexOf(allLogEntries[i].idOp) !== -1) {
           allLogEntries[i].osoba = nowaOsoba;
         }
       }
-      toast('Przekazano ' + ids.length + ' poz. → ' + nowaOsoba, 'success');
+      toast('Przekazuję ' + ids.length + ' poz. → ' + nowaOsoba, 'info');
       returnCartIds = [];
       returnCartQty = {};
       openOsobaDetail(currentDetailOsoba.id);
 
+      // 1. IndexedDB queue
+      var queueData = { action: 'przeniesNaOsobe', ids: ids, nowaOsoba: nowaOsoba, operator: savedOperator, batchId: batchId };
+      _oqSave(batchId, queueData);
+
+      // 2. fetch+keepalive
+      _fetchKeepalive({ action: 'przeniesNaOsobe', batchId: batchId, ids: ids, nowaOsoba: nowaOsoba, operator: savedOperator });
+
+      // 3. google.script.run
       google.script.run
-        .withFailureHandler(function (err) { toast('Błąd: ' + err.message, 'error'); loadLogBackground(); })
         .withSuccessHandler(function (res) {
-          if (!res.success) toast('Błąd: ' + res.error, 'error');
+          _oqRemove(batchId);
+          if (res && res.success) {
+            if (!res.deduplicated) toast('Przekazano ' + (res.count || ids.length) + ' poz. → ' + nowaOsoba, 'success');
+          } else {
+            toast('Błąd: ' + (res.error || ''), 'error');
+          }
           loadLogBackground();
         })
-        .przeniesNaOsobe(ids, nowaOsoba, currentOperator);
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+          loadLogBackground();
+        })
+        .przeniesNaOsobe(ids, nowaOsoba, savedOperator, batchId);
     }
 
     function toggleReturnCart(idOp, el) {
@@ -493,13 +628,25 @@
       }
       applyLogFilters();
 
+      var savedOperator = currentOperator;
+      var batchId = _genBatchId();
+
       // Zamknij modal od razu — backend pracuje w tle
       toast('Zwracam ' + ids.length + ' pozycji...', 'info');
       closeModal('modalOsobaDetail');
       switchTab('osoby', document.querySelector('.nav-btn[data-tab="osoby"]'));
 
+      // 1. Zapisz do IndexedDB (przeżywa restart)
+      var queueData = { action: 'zwrocBatch', ids: ids, photoDataMap: photoMap, qtyMap: qtyMap, operator: savedOperator, batchId: batchId };
+      _oqSave(batchId, queueData);
+
+      // 2. fetch+keepalive (przeżywa blokadę telefonu)
+      _fetchKeepalive({ action: 'zwrocBatch', batchId: batchId, ids: ids, photoDataMap: photoMap, qtyMap: qtyMap, operator: savedOperator });
+
+      // 3. google.script.run (obsługa odpowiedzi)
       google.script.run
         .withSuccessHandler(function (res) {
+          _oqRemove(batchId);
           if (res && res.success) {
             toast('Zwrócono ' + res.count + ' pozycji!', 'success');
           } else {
@@ -513,7 +660,7 @@
           loadLogBackground();
           loadKatalogBackground();
         })
-        .zwrocBatch(ids, photoMap, qtyMap, currentOperator);
+        .zwrocBatch(ids, photoMap, qtyMap, savedOperator, batchId);
     }
 
     function filterLogStatus(status, btn) {

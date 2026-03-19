@@ -241,20 +241,34 @@
       var r = raportUszkodzonychData[idx];
       if (!r) return;
       var nowaOsoba = allOsoby[osobaIdx].imie;
-      toast('Przenosz\u0119...', 'info');
+      var savedOperator = currentOperator;
+      var batchId = _genBatchId();
+
+      // Optymistyczny update lokalny
+      toast('Przenoszę...', 'info');
       r.osoba = nowaOsoba;
+      renderRaportUszkodzonych(raportUszkodzonychData);
+
+      // 1. IndexedDB queue
+      var queueData = { action: 'przeniesUszkodzone', idOp: r.idOp, nowaOsoba: nowaOsoba, operator: savedOperator, batchId: batchId };
+      _oqSave(batchId, queueData);
+
+      // 2. fetch+keepalive
+      _fetchKeepalive({ action: 'przeniesUszkodzone', batchId: batchId, idOp: r.idOp, nowaOsoba: nowaOsoba, operator: savedOperator });
+
+      // 3. google.script.run
       google.script.run
         .withSuccessHandler(function (res) {
+          _oqRemove(batchId);
           if (res && res.success) {
-            toast('Przeniesiono na: ' + nowaOsoba, 'success');
-            renderRaportUszkodzonych(raportUszkodzonychData);
-            loadLogBackground();
+            if (!res.deduplicated) toast('Przeniesiono na: ' + nowaOsoba, 'success');
           } else {
-            toast('B\u0142\u0105d: ' + (res.error || ''), 'error');
+            toast('Błąd: ' + (res.error || ''), 'error');
           }
+          loadLogBackground();
         })
-        .withFailureHandler(function (err) { toast('B\u0142\u0105d: ' + err.message, 'error'); })
-        .przeniesUszkodzone(r.idOp, nowaOsoba, currentOperator);
+        .withFailureHandler(function (err) { toast('Błąd: ' + err.message, 'error'); })
+        .przeniesUszkodzone(r.idOp, nowaOsoba, savedOperator, batchId);
     }
 
     /* =========================

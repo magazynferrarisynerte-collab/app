@@ -48,11 +48,12 @@ function parseDateForSort_(val) {
   return 0;
 }
 
-function wydajBatch(idOsoby, items, operator) {
+function wydajBatch(idOsoby, items, operator, batchId) {
   var lock = LockService.getScriptLock();
 
   try {
     lock.waitLock(30000);
+    if (batchId && _isDuplicateBatch(batchId)) return { success: true, deduplicated: true };
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var katSheet = ss.getSheetByName(SHEET_KATALOG);
@@ -288,10 +289,11 @@ function zwrocOperacje(idOperacji, photoBase64, operator) {
   }
 }
 
-function zwrocBatch(ids, photoDataMap, qtyMap, operator) {
+function zwrocBatch(ids, photoDataMap, qtyMap, operator, batchId) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
+    if (batchId && _isDuplicateBatch(batchId)) return { success: true, deduplicated: true };
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var przesSheet = ss.getSheetByName(SHEET_PRZESUNIECIA);

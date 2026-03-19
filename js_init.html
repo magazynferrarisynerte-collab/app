@@ -272,6 +272,11 @@
         if (info && info.version) {
           _appLoadedVersion = info.version;
         }
+        if (info && info.url) {
+          _APP_URL = info.url;
+          // Retry pending operations now that we have the URL
+          _oqRetryPending();
+        }
         // Poll co 30s
         setInterval(checkForNewVersion, 30000);
       }).getAppVersion();

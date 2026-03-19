@@ -147,10 +147,11 @@ function edytujOpisUszkodzenia(idOp, nowyOpis) {
   }
 }
 
-function przeniesNaOsobe(ids, nowaOsoba, operator) {
+function przeniesNaOsobe(ids, nowaOsoba, operator, batchId) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
+    if (batchId && _isDuplicateBatch(batchId)) return { success: true, deduplicated: true };
     var sheet = getSheet(SHEET_PRZESUNIECIA);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, error: 'Brak danych' };
@@ -200,10 +201,11 @@ function edytujIloscUszkodzenia(idOp, nowaIlosc) {
   }
 }
 
-function przeniesUszkodzone(idOp, nowaOsoba, operator) {
+function przeniesUszkodzone(idOp, nowaOsoba, operator, batchId) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
+    if (batchId && _isDuplicateBatch(batchId)) return { success: true, deduplicated: true };
     var sheet = getSheet(SHEET_PRZESUNIECIA);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, error: 'Brak danych' };

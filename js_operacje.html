@@ -654,7 +654,10 @@
       });
 
       var savedOsobaName = wypOsobaName;
+      var savedOsobaId = wypOsobaId;
       var savedSendWhatsApp = sendWhatsApp;
+      var savedOperator = currentOperator;
+      var batchId = _genBatchId();
 
       // Optymistyczny update: zamknij modal od razu
       toast("Wysyłam wydanie...", "info");
@@ -666,15 +669,23 @@
         sendWhatsAppWyp();
       }
 
+      // 1. Zapisz do IndexedDB (przeżywa restart przeglądarki)
+      var queueData = { action: 'wydajBatch', idOsoby: savedOsobaId, items: items, operator: savedOperator, batchId: batchId };
+      _oqSave(batchId, queueData);
+
+      // 2. fetch+keepalive (przeżywa zamknięcie zakładki / blokadę telefonu)
+      _fetchKeepalive({ action: 'wydajBatch', batchId: batchId, idOsoby: savedOsobaId, items: items, operator: savedOperator });
+
+      // 3. google.script.run (obsługa odpowiedzi + UI)
       google.script.run
         .withSuccessHandler(function (res) {
+          _oqRemove(batchId);
           if (res && res.success) {
             var msg = "Wydanie zapisane!";
             if (res.warnings && res.warnings.length) {
               msg += ' Uwagi: ' + res.warnings.join(', ');
             }
             toast(msg, "success");
-            // Auto-raport dla list
             if (isAnyListType(savedOsobaName)) {
               setTimeout(function() {
                 currentDetailOsoba = allOsoby.find(function(o) { return o.imie === savedOsobaName; }) || { imie: savedOsobaName };
@@ -688,11 +699,12 @@
           loadKatalogBackground();
         })
         .withFailureHandler(function (err) {
+          // Nie usuwaj z queue — fetch+keepalive mógł dostarczyć
           toast("Błąd wydania: " + err.message, "error", 8000);
           loadLogBackground();
           loadKatalogBackground();
         })
-        .wydajBatch(wypOsobaId, items, currentOperator);
+        .wydajBatch(savedOsobaId, items, savedOperator, batchId);
     }
 
     /* =========================
