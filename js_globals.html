@@ -100,7 +100,7 @@
       var hasPhone = currentDetailOsoba.telefon && currentDetailOsoba.telefon.trim().length > 0;
       var isList = isAnyListType(currentDetailOsoba.imie);
       document.getElementById('osobaWhatsStanBtn').style.display = (hasPhone && currentDetailActive.length > 0 && !isList) ? 'flex' : 'none';
-      document.getElementById('listaActions').style.display = isList ? 'block' : 'none';
+      document.getElementById('listaActions').style.display = isList ? 'flex' : 'none';
       document.getElementById('searchOsobaWyp').value = '';
       renderOsobaWypList(currentDetailActive);
       openModal('modalOsobaDetail');

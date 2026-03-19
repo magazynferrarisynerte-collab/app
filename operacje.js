@@ -84,15 +84,30 @@ function wydajBatch(idOsoby, items, operator) {
         photoUrl = savePhotoToDrive(item.photoBase64, 'Wydania', opId);
       }
 
-      // Damaged items: log only, no stock change
+      // Damaged items: move existing entry or create new
       if (item.damaged) {
-        przesSheet.appendRow([
-          opId, new Date(), osobaImie,
-          item.nazwaWys, item.sn || '',
-          qty, item.kategoria || 'N', 'Uszkodzone', photoUrl, '', '',
-          item.opisUszkodzenia || '',
-          operator || ''
-        ]);
+        if (item.logId) {
+          // Move existing damaged entry to this person/list
+          var przesData = przesSheet.getDataRange().getValues();
+          for (var di = 1; di < przesData.length; di++) {
+            if (String(przesData[di][COLS_PRZES.ID_OPERACJI]) === item.logId &&
+                String(przesData[di][COLS_PRZES.STATUS]) === 'Uszkodzone') {
+              przesSheet.getRange(di + 1, COLS_PRZES.OSOBA + 1).setValue(osobaImie);
+              if (operator) przesSheet.getRange(di + 1, COLS_PRZES.OPERATOR + 1).setValue(operator);
+              if (photoUrl) przesSheet.getRange(di + 1, COLS_PRZES.ZDJECIE_WYDANIE_URL + 1).setValue(photoUrl);
+              break;
+            }
+          }
+        } else {
+          // New damaged entry (no existing log)
+          przesSheet.appendRow([
+            opId, new Date(), osobaImie,
+            item.nazwaWys, item.sn || '',
+            qty, item.kategoria || 'N', 'Uszkodzone', photoUrl, '', '',
+            item.opisUszkodzenia || '',
+            operator || ''
+          ]);
+        }
         continue;
       }
 
@@ -328,7 +343,7 @@ function zwrocBatch(ids, photoDataMap, qtyMap, operator) {
         }
 
         var osobaName = String(przesData[i][COLS_PRZES.OSOBA] || '');
-        if (osobaName.indexOf('[Robocza]') !== 0) {
+        if (osobaName.indexOf('[Robocza]') !== 0 && osobaName.indexOf('[Zamówienia]') !== 0) {
           incrementStock(katSheet, nazwaSys, returnQty);
         }
         updateOstatnioWidziane(katSheet, nazwaSys);

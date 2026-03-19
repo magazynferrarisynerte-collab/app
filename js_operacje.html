@@ -648,7 +648,7 @@
           kategoria: c.kategoria,
           photoBase64: c.photoBase64 || null
         };
-        if (c.damaged) { o.damaged = true; o.opisUszkodzenia = c.opisUszkodzenia || ''; }
+        if (c.damaged) { o.damaged = true; o.opisUszkodzenia = c.opisUszkodzenia || ''; if (c._logId) o.logId = c._logId; }
         if (c.custom) o.custom = true;
         return o;
       });

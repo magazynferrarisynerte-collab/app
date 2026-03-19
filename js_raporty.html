@@ -16,10 +16,10 @@
       showLoading();
       google.script.run.withSuccessHandler(function(r) {
         hideLoading();
-        if (!r || !r.success) { showToast('Błąd tworzenia listy', 'error'); return; }
+        if (!r || !r.success) { toast('Błąd tworzenia listy', 'error'); return; }
         // Odśwież osoby
         allOsoby.push({ id: r.id, imie: fullName, telefon: 'lista' });
-        showToast('Utworzono listę: ' + nazwa);
+        toast('Utworzono listę: ' + nazwa);
         // Otwórz wydaj modal z pre-wybraną pseudo-osobą
         wypCartItems = [];
         currentSelectedGroup = null;
@@ -27,7 +27,7 @@
         openModal('modalWypozycz');
       }).withFailureHandler(function(e) {
         hideLoading();
-        showToast('Błąd: ' + e.message, 'error');
+        toast('Błąd: ' + e.message, 'error');
       }).addOsoba(fullName, 'lista');
     }
 
@@ -36,23 +36,23 @@
       var active = allLogEntries.filter(function(e) {
         return e.osoba === currentDetailOsoba.imie && e.status === 'Wydane';
       });
-      if (!active.length) { showToast('Lista jest pusta — brak narzędzi do zwrotu', 'info'); return; }
+      if (!active.length) { toast('Lista jest pusta — brak narzędzi do zwrotu', 'info'); return; }
       if (!confirm('Zwrócić wszystkie narzędzia (' + active.length + ') i zamknąć listę?')) return;
       var ids = active.map(function(e) { return e.idOp; });
       showLoading();
       google.script.run.withSuccessHandler(function(r) {
         hideLoading();
         if (r && r.success) {
-          showToast('Lista zamknięta, narzędzia zwrócone (' + ids.length + ')', 'success');
+          toast('Lista zamknięta, narzędzia zwrócone (' + ids.length + ')', 'success');
           closeModal('modalOsobaDetail');
           loadLogBackground();
           loadKatalogBackground();
         } else {
-          showToast('Błąd: ' + (r && r.error || 'Nieznany'), 'error');
+          toast('Błąd: ' + (r && r.error || 'Nieznany'), 'error');
         }
       }).withFailureHandler(function(e) {
         hideLoading();
-        showToast('Błąd: ' + e.message, 'error');
+        toast('Błąd: ' + e.message, 'error');
       }).zwrocBatch(ids, {}, {}, currentOperator);
     }
 
