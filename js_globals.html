@@ -171,13 +171,12 @@
 
     var currentDetailActive = [];
 
+    var _modalReturnState = null;
+    var _itemDetailReturnState = null;
+
     function goToOsoba(imie) {
-      // Znajdź osobę po imieniu i otwórz jej detal
       for (var i = 0; i < allOsoby.length; i++) {
         if (allOsoby[i].imie === imie) {
-          // Przełącz na zakładkę Osoby
-          var btn = document.querySelectorAll('.nav-btn')[1];
-          switchTab('tabOsoby', btn);
           openOsobaDetail(allOsoby[i].id);
           return;
         }
@@ -218,6 +217,13 @@
       document.getElementById('listaActions').style.display = isList ? 'flex' : 'none';
       document.getElementById('searchOsobaWyp').value = '';
       renderOsobaWypList(currentDetailActive);
+
+      // Zapamiętaj aktywny tab i scroll, żeby wrócić po zamknięciu
+      var activeTab = document.querySelector('.tab-content.active');
+      _modalReturnState = {
+        tabId: activeTab ? activeTab.id : null,
+        scrollY: window.scrollY
+      };
       openModal('modalOsobaDetail');
     }
 
@@ -652,6 +658,7 @@
 
       // Zamknij modal od razu — backend pracuje w tle
       toast('Zwracam ' + ids.length + ' pozycji...', 'info');
+      _modalReturnState = null;
       closeModal('modalOsobaDetail');
       switchTab('osoby', document.querySelector('.nav-btn[data-tab="osoby"]'));
 
@@ -759,7 +766,26 @@
     }
 
     function openModal(id) { document.getElementById(id).classList.add('show'); }
-    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+      var returnState = null;
+      if (id === 'modalOsobaDetail' && _modalReturnState) {
+        returnState = _modalReturnState;
+        _modalReturnState = null;
+      } else if (id === 'modalItemDetail' && _itemDetailReturnState) {
+        returnState = _itemDetailReturnState;
+        _itemDetailReturnState = null;
+      }
+      if (returnState) {
+        var currentTab = document.querySelector('.tab-content.active');
+        if (returnState.tabId && (!currentTab || currentTab.id !== returnState.tabId)) {
+          var tabName = returnState.tabId.replace('tab', '').toLowerCase();
+          var navBtn = document.querySelector('.nav-btn[data-tab="' + tabName + '"]');
+          switchTab(tabName, navBtn);
+        }
+        setTimeout(function() { window.scrollTo(0, returnState.scrollY); }, 50);
+      }
+    }
 
     /* =========================
        OPERATOR PICKER

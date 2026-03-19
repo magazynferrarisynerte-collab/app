@@ -1,0 +1,422 @@
+<script>
+    /* =========================
+       SZCZEGÓŁY NARZĘDZIA
+    ========================= */
+    function openItemDetail(nazwaSys) {
+      // Znajdź pozycję w katalogu
+      var item = null;
+      for (var i = 0; i < allKatalog.length; i++) {
+        if (allKatalog[i].nazwaSys === nazwaSys) { item = allKatalog[i]; break; }
+      }
+      if (!item) { toast('Nie znaleziono pozycji', 'error'); return; }
+
+      // Znajdź wszystkie egzemplarze o tej samej nazwie wyświetlanej (grupa)
+      var groupItems = [];
+      for (var i = 0; i < allKatalog.length; i++) {
+        if (allKatalog[i].nazwaWys === item.nazwaWys) groupItems.push(allKatalog[i]);
+      }
+
+      var displayName = simplifyName(item.nazwaWys) || item.nazwaWys;
+      document.getElementById('itemDetailTitle').textContent = displayName;
+
+      var h = '';
+
+      // Sekcja info
+      h += '<div style="background:#eef2f7;padding:12px;border-radius:12px;margin-bottom:10px;">';
+      h += '<div style="font-size:18px;font-weight:bold;margin-bottom:6px;">' + esc(displayName) + '</div>';
+      h += '<div style="font-size:13px;color:#636e72;margin-bottom:4px;">Kod systemowy: <b>' + esc(item.nazwaSys) + '</b></div>';
+      h += '<div style="font-size:13px;color:#636e72;margin-bottom:4px;">Kategoria: ' + getKategoriaBadge(item.kategoria) + '</div>';
+      if (item.sn) {
+        h += '<div style="font-size:13px;color:#636e72;margin-bottom:4px;">Numer seryjny: <b style="color:#8b5cf6;">' + esc(item.sn) + '</b></div>';
+      }
+      h += '<div style="font-size:13px;color:#636e72;margin-bottom:4px;">Stan początkowy: <b>' + item.stanPoczatkowy + '</b> | Aktualnie na stanie: <b style="color:' + (item.aktualnieNaStanie > 0 ? '#10b981' : '#ef4444') + ';">' + item.aktualnieNaStanie + '</b></div>';
+      if (item.flaga) {
+        h += '<div style="font-size:13px;color:#ef4444;margin-bottom:4px;">&#9873; Oflagowane</div>';
+      }
+      if (item.tagi) {
+        h += '<div style="margin-top:4px;">' + item.tagi.split(',').map(function(t) {
+          return '<span style="background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:8px;font-size:12px;margin-right:4px;">' + esc(t.trim()) + '</span>';
+        }).join('') + '</div>';
+      }
+      if (item.opis) {
+        h += '<div style="font-size:13px;color:#636e72;margin-top:4px;">Opis: <span style="color:#334155;">' + esc(item.opis) + '</span></div>';
+      }
+      if (item.przesun) {
+        h += '<div style="font-size:13px;color:#636e72;margin-top:4px;">Przesunięcie: <b style="color:#0891b2;">' + esc(item.przesun) + '</b>'
+          + (item.dataPrzesun ? ' <span style="color:#a0aec0;">(' + esc(item.dataPrzesun) + ')</span>' : '') + '</div>';
+      }
+      if (item.ostatnioWidziane) {
+        h += '<div style="font-size:12px;color:#a0aec0;margin-top:4px;">Ostatnio widziane: ' + esc(item.ostatnioWidziane) + '</div>';
+      }
+      h += '</div>';
+
+      // Inne egzemplarze w grupie (jeśli > 1)
+      if (groupItems.length > 1) {
+        h += '<div style="background:#f0fdf4;padding:10px;border-radius:12px;margin-bottom:10px;">';
+        h += '<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">Wszystkie egzemplarze (' + groupItems.length + '):</div>';
+        for (var gi = 0; gi < groupItems.length; gi++) {
+          var ge = groupItems[gi];
+          var stColor = ge.aktualnieNaStanie > 0 ? '#10b981' : '#ef4444';
+          var stLabel = ge.aktualnieNaStanie > 0 ? 'Dostępne' : 'Wydane';
+          var isCurrent = ge.nazwaSys === nazwaSys;
+          h += '<div onclick="openItemDetail(\'' + esc(ge.nazwaSys) + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer;'
+            + (isCurrent ? 'background:#d1fae5;' : 'background:white;') + 'margin-bottom:3px;">';
+          h += '<span style="font-size:13px;">' + esc(ge.sn ? 'SN: ' + ge.sn : ge.nazwaSys) + '</span>';
+          h += '<span style="color:' + stColor + ';font-size:12px;font-weight:bold;">' + stLabel + '</span>';
+          h += '</div>';
+        }
+        h += '</div>';
+      }
+
+      // Przyciski akcji
+      h += '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">';
+      if (item.aktualnieNaStanie > 0) {
+        h += '<button class="btn btn-success" onclick="_itemDetailReturnState=null;closeModal(\'modalItemDetail\');szybkieWydaj(\'' + esc(item.nazwaWys) + '\',\'' + esc(item.kategoria) + '\')" style="height:40px;font-size:13px;flex:1;margin-bottom:0;border-radius:10px;">Wydaj</button>';
+      }
+      h += '<button class="btn btn-danger" onclick="_itemDetailReturnState=null;closeModal(\'modalItemDetail\');openDamageModal(\'' + esc(item.nazwaSys) + '\',\'' + esc(item.sn || '') + '\')" style="height:40px;font-size:13px;flex:1;margin-bottom:0;border-radius:10px;">Zgłoś uszkodzenie</button>';
+      h += '<button class="btn btn-primary" onclick="_itemDetailReturnState=null;closeModal(\'modalItemDetail\');editTagi(\'' + esc(item.id) + '\')" style="height:40px;font-size:13px;flex:1;margin-bottom:0;border-radius:10px;">Edytuj tagi</button>';
+      h += '</div>';
+
+      // Historia operacji z logu
+      var history = [];
+      for (var li = 0; li < allLogEntries.length; li++) {
+        var le = allLogEntries[li];
+        if (le.nazwaSys === nazwaSys) history.push(le);
+      }
+
+      h += '<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">Historia operacji (' + history.length + '):</div>';
+      if (history.length === 0) {
+        h += '<div class="empty-msg">Brak operacji dla tej pozycji</div>';
+      } else {
+        for (var hi = 0; hi < history.length; hi++) {
+          var he = history[hi];
+          var stInfo = STATUS_STYLES[he.status] || {};
+          h += '<div class="log-card" style="margin-bottom:4px;padding:8px 10px;">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">';
+          h += getStatusBadge(he.status);
+          if (he.osoba) {
+            h += '<span onclick="_itemDetailReturnState=null;closeModal(\'modalItemDetail\');goToOsoba(\'' + esc(he.osoba) + '\')" style="color:#667eea;font-weight:bold;cursor:pointer;font-size:13px;">' + esc(he.osoba) + '</span>';
+          }
+          h += '<span style="color:#636e72;font-size:12px;">' + esc(he.dataWydania) + '</span>';
+          if (he.ilosc > 1) h += '<span style="font-size:12px;color:#636e72;">x' + he.ilosc + '</span>';
+          h += '</div>';
+          if (he.dataZwrotu) {
+            h += '<div style="font-size:11px;color:#636e72;margin-top:2px;">Zwrot: ' + esc(he.dataZwrotu) + '</div>';
+          }
+          if (he.opisUszkodzenia) {
+            h += '<div style="font-size:11px;color:#ef4444;margin-top:2px;">Uszkodzenie: ' + esc(he.opisUszkodzenia) + '</div>';
+          }
+          if (he.operator) {
+            h += '<div style="font-size:10px;color:#e67e22;margin-top:2px;">Operator: ' + esc(he.operator) + '</div>';
+          }
+          h += '</div>';
+        }
+      }
+
+      document.getElementById('itemDetailBody').innerHTML = h;
+
+      var activeTab = document.querySelector('.tab-content.active');
+      _itemDetailReturnState = {
+        tabId: activeTab ? activeTab.id : null,
+        scrollY: window.scrollY
+      };
+      openModal('modalItemDetail');
+    }
+
+    /* =========================
+       USZKODZENIA
+    ========================= */
+    function openDamageModal(nazwaSys, sn) {
+      damageNazwaSys = nazwaSys;
+      damageSN = sn || '';
+      document.getElementById('damageNarzInfo').innerHTML = '<b>' + esc(nazwaSys) + '</b>' + (sn ? ' (SN: ' + esc(sn) + ')' : '');
+      document.getElementById('damageOpis').value = '';
+      document.getElementById('damageIlosc').value = '1';
+      openModal('modalDamage');
+    }
+
+    function submitDamage() {
+      var opis = document.getElementById('damageOpis').value.trim();
+      var ilosc = parseInt(document.getElementById('damageIlosc').value) || 1;
+      if (!opis) { toast("Opisz uszkodzenie", "error"); return; }
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          hideLoading();
+          if (res && res.success) {
+            toast("Uszkodzenie zgłoszone!", "success");
+            closeModal('modalDamage');
+            loadKatalog();
+            loadLog();
+          } else {
+            toast("Błąd: " + (res.error || 'Nieznany'), "error");
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          toast("Błąd: " + err.message, "error");
+        })
+        .zglosUszkodzenie(damageNazwaSys, damageSN, opis, ilosc, currentOperator);
+    }
+
+    function toggleFlaga(ids) {
+      // Optymistyczny toggle lokalnie
+      var newState = null;
+      for (var i = 0; i < allKatalog.length; i++) {
+        for (var j = 0; j < ids.length; j++) {
+          if (allKatalog[i].id === ids[j]) {
+            if (newState === null) newState = !allKatalog[i].flaga;
+            allKatalog[i].flaga = newState;
+          }
+        }
+      }
+      applyNarzFilters();
+
+      // Backend toggle dla każdego ID
+      var pending = ids.length;
+      for (var k = 0; k < ids.length; k++) {
+        google.script.run
+          .withSuccessHandler(function () {
+            pending--;
+            if (pending === 0) loadKatalogBackground();
+          })
+          .withFailureHandler(function () {
+            pending--;
+            if (pending === 0) loadKatalogBackground();
+          })
+          .toggleFlaga(ids[k]);
+      }
+    }
+
+    function editTagi(idKatalog) {
+      var item = null;
+      for (var i = 0; i < allKatalog.length; i++) {
+        if (allKatalog[i].id === idKatalog) { item = allKatalog[i]; break; }
+      }
+      var current = item ? (item.tagi || '') : '';
+      var val = prompt('Tagi (oddzielone przecinkiem):', current);
+      if (val === null) return;
+      // Optimistic update
+      if (item) item.tagi = val;
+      applyNarzFilters();
+      google.script.run
+        .withSuccessHandler(function () { loadKatalogBackground(); })
+        .withFailureHandler(function (err) { toast('Błąd: ' + err.message, 'error'); loadKatalogBackground(); })
+        .saveTagi(idKatalog, val);
+    }
+
+    function runCleanNames() {
+      if (!confirm('Wyczyścić nazwy wyświetlane w katalogu? (usunięcie angielskiego, numerów modeli, poprawki skrótów)')) return;
+      var btn = document.getElementById('cleanNamesBtn');
+      btn.disabled = true; btn.textContent = 'Czyszczę...';
+      google.script.run
+        .withSuccessHandler(function (res) {
+          btn.disabled = false; btn.textContent = 'Wyczyść nazwy';
+          if (res && res.success) {
+            toast('Poprawiono ' + res.count + '/' + res.total + ' nazw', 'success');
+            if (res.examples && res.examples.length) {
+              console.log('Przykłady zmian:', res.examples);
+            }
+            loadKatalogBackground();
+          } else {
+            toast('Błąd: ' + (res.error || ''), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false; btn.textContent = 'Wyczyść nazwy';
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .cleanDisplayNames();
+    }
+
+    function runAutoTag() {
+      if (!confirm('Automatycznie otagować cały katalog synonimami?')) return;
+      var btn = document.getElementById('autoTagBtn');
+      btn.disabled = true; btn.textContent = 'Taguję...';
+      google.script.run
+        .withSuccessHandler(function (res) {
+          btn.disabled = false; btn.textContent = 'Auto-tagi';
+          if (res && res.success) {
+            var msg = 'Otagowano ' + res.count + '/' + res.total;
+            if (res.cleaned) msg += ', nazwy: ' + res.cleaned;
+            toast(msg, 'success');
+            loadKatalogBackground();
+          } else {
+            toast('Błąd: ' + (res.error || ''), 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false; btn.textContent = 'Auto-tagi';
+          toast('Błąd: ' + err.message, 'error');
+        })
+        .autoTagKatalog();
+    }
+
+    var _przesunPending = null;
+    function przesunDoZuzywalnych(idKatalog, nazwaWys) {
+      if (_przesunPending && _przesunPending.id === idKatalog) {
+        // Drugie kliknięcie — potwierdzone
+        clearTimeout(_przesunPending.timer);
+        _przesunPending = null;
+
+        // Optymistyczny update
+        for (var i = 0; i < allKatalog.length; i++) {
+          if (allKatalog[i].id === idKatalog) { allKatalog[i].kategoria = 'Z'; break; }
+        }
+        applyNarzFilters();
+        toast('Przeniesiono do zużywalnych', 'success');
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) toast('Błąd zapisu: ' + (res.error || ''), 'error');
+            loadKatalogBackground();
+          })
+          .withFailureHandler(function (err) {
+            toast('Błąd: ' + err.message, 'error');
+            loadKatalogBackground();
+          })
+          .changeKategoria(idKatalog, 'Z');
+      } else {
+        // Pierwsze kliknięcie — czekaj na potwierdzenie
+        if (_przesunPending) clearTimeout(_przesunPending.timer);
+        toast('Kliknij ponownie aby potwierdzić przesunięcie', 'info');
+        _przesunPending = {
+          id: idKatalog,
+          timer: setTimeout(function () { _przesunPending = null; }, 3000)
+        };
+      }
+    }
+
+    function szybkieWydaj(nazwaWys, kategoria) {
+      // Optymistyczny update — zmniejsz stan lokalnie od razu
+      for (var i = 0; i < allKatalog.length; i++) {
+        if (allKatalog[i].nazwaWys === nazwaWys && allKatalog[i].aktualnieNaStanie > 0) {
+          allKatalog[i].aktualnieNaStanie--;
+          break;
+        }
+      }
+      applyNarzFilters();
+      toast('Wydano 1x ' + nazwaWys, 'success');
+
+      // Backend w tle
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            loadKatalogBackground();
+            loadLogBackground();
+          } else {
+            toast('Błąd zapisu: ' + (res.error || 'Nieznany'), 'error');
+            loadKatalogBackground();
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+          loadKatalogBackground();
+        })
+        .wydajBatch('', [{ nazwaWys: nazwaWys, sn: '', qty: 1, kategoria: kategoria, photoBase64: null }], currentOperator);
+    }
+
+    function uzupelnijStan(nazwaWys) {
+      var qtyStr = prompt('Ile sztuk uzupełnić dla "' + nazwaWys + '"?', '1');
+      if (!qtyStr) return;
+      var qty = parseInt(qtyStr);
+      if (!qty || qty < 1) { toast('Podaj prawidłową ilość', 'error'); return; }
+
+      // Optymistyczny update
+      for (var i = 0; i < allKatalog.length; i++) {
+        if (allKatalog[i].nazwaWys === nazwaWys) {
+          var max = allKatalog[i].stanPoczatkowy - allKatalog[i].aktualnieNaStanie;
+          var add = Math.min(qty, max);
+          allKatalog[i].aktualnieNaStanie += add;
+          break;
+        }
+      }
+      applyNarzFilters();
+      toast('Uzupełniono ' + qty + 'x ' + nazwaWys, 'success');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.success) {
+            loadKatalogBackground();
+          } else {
+            toast('Błąd: ' + (res.error || 'Nieznany'), 'error');
+            loadKatalogBackground();
+          }
+        })
+        .withFailureHandler(function (err) {
+          toast('Błąd: ' + err.message, 'error');
+          loadKatalogBackground();
+        })
+        .uzupelnijStan(nazwaWys, qty);
+    }
+
+    /* =========================
+       PODSUMOWANIE STANU
+    ========================= */
+    function toggleSummary() {
+      var section = document.getElementById('summaryCards');
+      var btn = document.getElementById('btnToggleSummary');
+      if (section.style.display === 'none') {
+        section.style.display = 'block';
+        btn.textContent = 'Powrót';
+        showLoading();
+        google.script.run.withSuccessHandler(function (data) {
+          hideLoading();
+          summaryData = data || [];
+          renderSummaryCards(summaryData);
+        }).withFailureHandler(function () {
+          hideLoading();
+          toast('Błąd ładowania podsumowania', 'error');
+        }).getSummaryData();
+      } else {
+        section.style.display = 'none';
+        btn.textContent = 'Podsumowanie stanu';
+      }
+    }
+
+    function renderSummaryCards(data) {
+      var container = document.getElementById('summaryCards');
+      if (!data || !data.length) {
+        container.innerHTML = '<div class="empty-msg">Brak danych w katalogu</div>';
+        return;
+      }
+
+      // Filtruj wg aktualnego filtra kategorii
+      var filtered = data;
+      if (currentNarzKategoria !== 'all') {
+        filtered = data.filter(function (s) { return s.kategoria === currentNarzKategoria; });
+      }
+      if (!filtered.length) {
+        container.innerHTML = '<div class="empty-msg">Brak pozycji w tej kategorii</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < filtered.length; i++) {
+        var s = filtered[i];
+        var percent = s.stanPoczatkowy > 0
+          ? Math.round((s.aktualnieNaStanie / s.stanPoczatkowy) * 100)
+          : 0;
+        var barColor = percent > 50 ? '#10b981' : (percent > 20 ? '#f59e0b' : '#ef4444');
+
+        html += '<div class="narz-card" style="margin-bottom:10px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        html += '<b>' + esc(simplifyName(s.nazwaWys) || s.nazwaWys) + '</b>';
+        html += getKategoriaBadge(s.kategoria);
+        html += '</div>';
+
+        html += '<div class="summary-bar-bg">';
+        html += '<div class="summary-bar-fill" style="background:' + barColor + ';width:' + percent + '%;"></div>';
+        html += '</div>';
+
+        html += '<div style="display:flex;justify-content:space-between;font-size:13px;color:#636e72;flex-wrap:wrap;gap:4px;">';
+        html += '<span>Na stanie: <b>' + s.aktualnieNaStanie + '</b> / ' + s.stanPoczatkowy + '</span>';
+        if (s.wydane > 0) html += '<span>Wydane: ' + s.wydane + '</span>';
+        if (s.zuzyte > 0) html += '<span>Zużyte: ' + s.zuzyte + '</span>';
+        html += '</div>';
+        html += '</div>';
+      }
+
+      container.innerHTML = html;
+    }
+</script>
