@@ -447,10 +447,8 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     var action = body.action;
     var batchId = body.batchId || '';
-    if (batchId && _isDuplicateBatch(batchId)) {
-      return ContentService.createTextOutput(JSON.stringify({ success: true, deduplicated: true }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    // Dedup check jest WEWNĄTRZ każdej funkcji (po lock.waitLock),
+    // NIE tutaj — bo doPost + funkcja = 2x _isDuplicateBatch = zawsze "duplikat"
     var result;
     if (action === 'wydajBatch') {
       result = wydajBatch(body.idOsoby, body.items, body.operator, batchId);
